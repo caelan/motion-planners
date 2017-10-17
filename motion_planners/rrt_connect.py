@@ -43,7 +43,8 @@ def direct_path(q1, q2, extend, collision):
     return path
 
 
-def birrt(q1, q2, distance, sample, extend, collision, restarts=RRT_RESTARTS, iterations=RRT_ITERATIONS, smooth=RRT_SMOOTHING):
+def birrt(q1, q2, distance, sample, extend, collision,
+          restarts=RRT_RESTARTS, iterations=RRT_ITERATIONS, smooth=RRT_SMOOTHING):
     path = direct_path(q1, q2, extend, collision)
     if path is not None:
         return path
