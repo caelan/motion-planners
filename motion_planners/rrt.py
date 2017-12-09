@@ -9,10 +9,18 @@ class TreeNode(object):
         self.config = config
         self.parent = parent
 
+    #def retrace(self):
+    #    if self.parent is None:
+    #        return [self]
+    #    return self.parent.retrace() + [self]
+
     def retrace(self):
-        if self.parent is None:
-            return [self]
-        return self.parent.retrace() + [self]
+        sequence = []
+        node = self
+        while node is not None:
+            sequence.append(node)
+            node = node.parent
+        return sequence[::-1]
 
     def clear(self):
         self.node_handle = None
