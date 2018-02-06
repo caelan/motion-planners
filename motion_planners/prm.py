@@ -221,21 +221,22 @@ class DegreePRM(PRM):
             distance, extend, collision, samples=samples)
 
     def grow(self, samples):
+        # TODO: do sorted edges version
         new_vertices = self.add(samples)
-        if self.target_degree > 0:
-            for v1 in new_vertices:
-                degree = 0
-                for _, v2 in sorted(filter(lambda (d, v2): v2 != v1 and d <= self.connect_distance,
-                                           map(lambda v: (self.distance(v1.q, v.q), v), self.vertices.values())),  # TODO - slow, use nearest neighbors
-                                    key=operator.itemgetter(0)):
-                    if degree >= self.target_degree:
-                        break
-
-                    if v2 not in v1.edges:
-                        path = list(self.extend(v1.q, v2.q))[:-1]
-                        if not any(self.collision(q) for q in path):
-                            self.connect(v1, v2, path)
-                            degree += 1
-                    else:
+        if self.target_degree == 0:
+            return new_vertices
+        for v1 in new_vertices:
+            degree = 0
+            for _, v2 in sorted(filter(lambda (d, v2): v2 != v1 and d <= self.connect_distance,
+                                       map(lambda v: (self.distance(v1.q, v.q), v), self.vertices.values())),  # TODO - slow, use nearest neighbors
+                                key=operator.itemgetter(0)):
+                if self.target_degree <= degree:
+                    break
+                if v2 not in v1.edges:
+                    path = list(self.extend(v1.q, v2.q))[:-1]
+                    if not any(self.collision(q) for q in path):
+                        self.connect(v1, v2, path)
                         degree += 1
+                else:
+                    degree += 1
         return new_vertices
