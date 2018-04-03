@@ -16,3 +16,5 @@ def smooth_path(path, extend, collision, iterations=50):
         if (len(shortcut) < (j - i)) and all(not collision(q) for q in shortcut):
             smoothed_path = smoothed_path[:i + 1] + shortcut + smoothed_path[j + 1:]
     return smoothed_path
+
+# TODO: sparsify path to just waypoints

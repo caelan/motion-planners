@@ -41,7 +41,7 @@ class TreeNode(object):
 def configs(nodes):
     if nodes is None:
         return None
-    return map(lambda n: n.config, nodes)
+    return list(map(lambda n: n.config, nodes))
 
 
 def rrt(start, goal_sample, distance, sample, extend, collision, goal_test=lambda q: False, iterations=RRT_ITERATIONS, goal_probability=.2):

@@ -33,6 +33,7 @@ def rrt_connect(q1, q2, distance, sample, extend, collision, iterations=RRT_ITER
             return configs(path1[:-1] + path2[::-1])
     return None
 
+# TODO: version which checks whether the segment is valid
 
 def direct_path(q1, q2, extend, collision):
     if collision(q1) or collision(q2):
