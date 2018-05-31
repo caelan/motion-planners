@@ -1,6 +1,6 @@
-from motion_planners.smoothing import smooth_path
-from motion_planners.rrt import TreeNode, configs
-from motion_planners.utils import irange, argmin, RRT_ITERATIONS, RRT_RESTARTS, RRT_SMOOTHING
+from .smoothing import smooth_path
+from .rrt import TreeNode, configs
+from .utils import irange, argmin, RRT_ITERATIONS, RRT_RESTARTS, RRT_SMOOTHING
 
 
 def rrt_connect(q1, q2, distance, sample, extend, collision, iterations=RRT_ITERATIONS):

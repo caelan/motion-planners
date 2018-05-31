@@ -4,7 +4,7 @@ from heapq import heappop, heappush
 from recordclass import recordclass
 import numpy as np
 
-from motion_planners.utils import INF
+from .utils import INF
 
 Node = recordclass('Node', ['g', 'parent'])
 

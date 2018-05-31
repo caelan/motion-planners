@@ -2,7 +2,7 @@ from collections import namedtuple, Mapping
 from heapq import heappop, heappush
 import operator
 
-from motion_planners.utils import INF, pairs, merge_dicts, flatten
+from .utils import INF, pairs, merge_dicts, flatten
 
 
 # TODO - Lazy-PRM, Visibility-PRM, PRM*

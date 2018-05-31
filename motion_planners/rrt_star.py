@@ -1,7 +1,7 @@
 from random import random
 from time import time
 
-from motion_planners.utils import INF, argmin
+from .utils import INF, argmin
 
 
 class OptimalNode(object):

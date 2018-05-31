@@ -1,6 +1,6 @@
 from random import random
 
-from motion_planners.utils import irange, argmin, RRT_ITERATIONS
+from .utils import irange, argmin, RRT_ITERATIONS
 
 
 class TreeNode(object):

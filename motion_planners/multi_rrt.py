@@ -1,8 +1,8 @@
 from collections import Mapping
 from random import random
 
-from motion_planners.rrt import TreeNode, configs
-from motion_planners.utils import irange, argmin, pairs, randomize, take, enum
+from .rrt import TreeNode, configs
+from .utils import irange, argmin, pairs, randomize, take, enum
 
 ts = enum('ALL', 'SUCCESS', 'PATH', 'NONE')
 
