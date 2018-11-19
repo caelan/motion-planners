@@ -9,11 +9,6 @@ import random
 import time
 import numpy as np
 
-#class Graph(object):
-#    def __init__(self, samples):
-#        # TODO: multi-query motion planning
-#        self.samples = samples
-
 Node = namedtuple('Node', ['g', 'parent'])
 unit_cost_fn = lambda v1, v2: 1.
 zero_heuristic_fn = lambda v: 0
@@ -87,50 +82,43 @@ def check_path(path, colliding_vertices, colliding_edges, samples, extend_fn, co
             return False
     return True
 
-def lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn, num_samples=100, max_degree=5,
+def lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn, num_samples=100, max_degree=10,
              weights=None, p_norm=2, max_distance=INF, approximate_eps=0.0,
-             max_cost=INF, max_time=INF):
+             max_cost=INF, max_time=INF, max_paths=INF):
+    # TODO: multi-query motion planning
     start_time = time.time()
-    start_index, end_index = 0, 1
-    samples = [sample_fn() for _ in range(num_samples)]
-    samples[start_index] = start_conf
-    samples[end_index] = end_conf
-
     # TODO: can embed pose and/or points on the robot for other distances
     if weights is None:
         weights = np.ones(len(start_conf))
-    #weights = np.array([1., 1., 1. / np.pi])
     embed_fn = lambda q: weights * q
-    embedded = list(map(embed_fn, samples))
-    distance_fn = lambda v1, v2: np.linalg.norm(embedded[v2] - embedded[v1], ord=p_norm)
+    distance_fn = lambda q1, q2: np.linalg.norm(embed_fn(q2) - embed_fn(q1), ord=p_norm)
+    cost_fn = lambda v1, v2: distance_fn(samples[v1], samples[v2])
+    # TODO: can compute cost between waypoints from extend_fn
 
+    samples = []
+    while len(samples) < num_samples:
+        conf = sample_fn()
+        if (distance_fn(start_conf, conf) + distance_fn(conf, end_conf)) < max_cost:
+            samples.append(conf)
+    start_index, end_index = 0, 1
+    samples[start_index] = start_conf
+    samples[end_index] = end_conf
+
+    embedded = list(map(embed_fn, samples))
     kd_tree = KDTree(embedded)
     vertices = list(range(len(samples)))
-    neighbors_from_index = {v: set() for v in vertices}
-
-    #edges = set()
-    #pairs = kd_tree.query_pairs(max_distance, p=p_norm, eps=approximate_eps)
-    #for v1, v2 in sorted(pairs, key=lambda edge: distance_fn(*edge)): # any or all
-    #    if any(len(neighbors_from_index[v]) < max_degree+1 for v in (v1, v2)):
-    #        edges.update([(v1, v2), (v2, v1)])
-    #        neighbors_from_index[v1].add(v2)
-    #        neighbors_from_index[v2].add(v1)
-    #print(time.time() - start_time, len(edges), float(len(edges))/len(samples))
-
     edges = set()
     for v1 in vertices:
         # TODO: could dynamically compute distances
         distances, neighbors = kd_tree.query(embedded[v1], k=max_degree+1, eps=approximate_eps,
                                              p=p_norm, distance_upper_bound=max_distance)
-        # kd_tree.query_ball_point(x, r=max_distance, eps=approximate_eps, p=p_norm)
         for d, v2 in zip(distances, neighbors):
             if (d < max_distance) and (v1 != v2):
                 edges.update([(v1, v2), (v2, v1)])
+    neighbors_from_index = {v: set() for v in vertices}
     for v1, v2 in edges:
         neighbors_from_index[v1].add(v2)
-    print(time.time() - start_time, len(edges), float(len(edges))/len(samples))
-
-    # TODO: max radius from start/goal
+    #print(time.time() - start_time, len(edges), float(len(edges))/len(samples))
 
     colliding_vertices, colliding_edges = {}, {}
     def neighbors_fn(v1):
@@ -139,8 +127,6 @@ def lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn, num_sampl
                         colliding_edges.get((v1, v2), False)):
                 yield v2
 
-    # TODO: can compute cost between waypoints from extend_fn
-    cost_fn = distance_fn
     visited = dijkstra(end_index, neighbors_fn, cost_fn)
     heuristic_fn = lambda v: visited[v].g if v in visited else INF
     while elapsed_time(start_time) < max_time:
@@ -169,7 +155,7 @@ def replan_loop(start_conf, end_conf, sample_fn, extend_fn, collision_fn, params
         return path
     for num_samples in params_list:
         path = lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn,
-                        num_samples=num_samples**kwargs)
+                        num_samples=num_samples, **kwargs)
         if path is not None:
             return smooth_path(path, extend_fn, collision_fn, iterations=smooth)
     return None
