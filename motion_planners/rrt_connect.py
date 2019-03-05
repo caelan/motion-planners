@@ -11,27 +11,27 @@ def rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn, iterati
     # TODO: collision(q1, q2)
     if collision_fn(q1) or collision_fn(q2):
         return None
-    root1, root2 = TreeNode(q1), TreeNode(q2)
-    nodes1, nodes2 = [root1], [root2]
+    nodes1, nodes2 = [TreeNode(q1)], [TreeNode(q2)]
     for iteration in irange(iterations):
         swap = len(nodes1) > len(nodes2)
+        tree1, tree2 = nodes1, nodes2
         if swap:
-            nodes1, nodes2 = nodes2, nodes1
+            tree1, tree2 = nodes2, nodes1
         s = sample_fn()
 
-        last1 = argmin(lambda n: distance_fn(n.config, s), nodes1)
+        last1 = argmin(lambda n: distance_fn(n.config, s), tree1)
         for q in asymmetric_extend(last1.config, s, extend_fn, swap):
             if collision_fn(q):
                 break
             last1 = TreeNode(q, parent=last1)
-            nodes1.append(last1)
+            tree1.append(last1)
 
-        last2 = argmin(lambda n: distance_fn(n.config, last1.config), nodes2)
+        last2 = argmin(lambda n: distance_fn(n.config, last1.config), tree2)
         for q in asymmetric_extend(last2.config, last1.config, extend_fn, not swap):
             if collision_fn(q):
                 break
             last2 = TreeNode(q, parent=last2)
-            nodes2.append(last2)
+            tree2.append(last2)
         else:
             path1, path2 = last1.retrace(), last2.retrace()
             if swap:
