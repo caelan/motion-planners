@@ -10,9 +10,10 @@ def asymmetric_extend(q1, q2, extend_fn, backward=False):
     return extend_fn(q1, q2)
 
 def rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
-                iterations=RRT_ITERATIONS, max_time=INF):
+                iterations=RRT_ITERATIONS, tree_frequency=1, max_time=INF):
     # TODO: collision(q1, q2)
     start_time = time.time()
+    assert tree_frequency >= 1
     if collision_fn(q1) or collision_fn(q2):
         return None
     nodes1, nodes2 = [TreeNode(q1)], [TreeNode(q2)]
@@ -26,18 +27,22 @@ def rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
         s = sample_fn()
 
         last1 = argmin(lambda n: distance_fn(n.config, s), tree1)
-        for q in asymmetric_extend(last1.config, s, extend_fn, swap):
+        extend1 = list(asymmetric_extend(last1.config, s, extend_fn, swap))
+        for i, q in enumerate(extend1):
             if collision_fn(q):
                 break
-            last1 = TreeNode(q, parent=last1)
-            tree1.append(last1)
+            if (i % tree_frequency == 0) or (i == len(extend1) - 1):
+                last1 = TreeNode(q, parent=last1)
+                tree1.append(last1)
 
         last2 = argmin(lambda n: distance_fn(n.config, last1.config), tree2)
-        for q in asymmetric_extend(last2.config, last1.config, extend_fn, not swap):
+        extend2 = asymmetric_extend(last2.config, last1.config, extend_fn, not swap)
+        for i, q in enumerate(extend2):
             if collision_fn(q):
                 break
-            last2 = TreeNode(q, parent=last2)
-            tree2.append(last2)
+            if (i % tree_frequency == 0) or (i == len(extend2) - 1):
+                last2 = TreeNode(q, parent=last2)
+                tree2.append(last2)
         else:
             path1, path2 = last1.retrace(), last2.retrace()
             if swap:
@@ -59,7 +64,7 @@ def direct_path(q1, q2, extend_fn, collision_fn):
     return path
 
 def birrt(q1, q2, distance, sample, extend, collision,
-          restarts=RRT_RESTARTS, iterations=RRT_ITERATIONS, smooth=RRT_SMOOTHING, max_time=INF):
+          restarts=RRT_RESTARTS, smooth=RRT_SMOOTHING, max_time=INF, **kwargs):
     start_time = time.time()
     if collision(q1) or collision(q2):
         return None
@@ -70,7 +75,7 @@ def birrt(q1, q2, distance, sample, extend, collision,
         if max_time <= elapsed_time(start_time):
             break
         path = rrt_connect(q1, q2, distance, sample, extend, collision,
-                           iterations=iterations, max_time=max_time - elapsed_time(start_time))
+                           max_time=max_time - elapsed_time(start_time), **kwargs)
         if path is not None:
             #print('{} attempts'.format(attempt))
             if smooth is None:
