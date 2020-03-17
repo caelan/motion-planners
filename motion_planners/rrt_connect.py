@@ -11,9 +11,19 @@ def asymmetric_extend(q1, q2, extend_fn, backward=False):
         return reversed(list(extend_fn(q2, q1)))
     return extend_fn(q1, q2)
 
+def extend_towards(tree, target, distance_fn, extend_fn, collision_fn, swap, tree_frequency):
+    last = argmin(lambda n: distance_fn(n.config, target), tree)
+    extend = list(asymmetric_extend(last.config, target, extend_fn, swap))
+    safe = list(takewhile(negate(collision_fn), extend))
+    for i, q in enumerate(safe):
+        if (i % tree_frequency == 0) or (i == len(safe) - 1):
+            last = TreeNode(q, parent=last)
+            tree.append(last)
+    success = len(extend) == len(safe)
+    return last, success
+
 def rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
                 iterations=RRT_ITERATIONS, tree_frequency=1, max_time=INF):
-    # TODO: collision(q1, q2)
     start_time = time.time()
     assert tree_frequency >= 1
     if collision_fn(q1) or collision_fn(q2):
@@ -26,25 +36,13 @@ def rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
         tree1, tree2 = nodes1, nodes2
         if swap:
             tree1, tree2 = nodes2, nodes1
-        s = sample_fn()
 
-        last1 = argmin(lambda n: distance_fn(n.config, s), tree1)
-        extend1 = list(asymmetric_extend(last1.config, s, extend_fn, swap))
-        safe1 = list(takewhile(negate(collision_fn), extend1))
-        for i, q in enumerate(safe1):
-            if (i % tree_frequency == 0) or (i == len(safe1) - 1):
-                last1 = TreeNode(q, parent=last1)
-                tree1.append(last1)
+        last1, _ = extend_towards(tree1, sample_fn(), distance_fn, extend_fn, collision_fn,
+                                  swap, tree_frequency)
+        last2, success = extend_towards(tree2, last1.config, distance_fn, extend_fn, collision_fn,
+                                        not swap, tree_frequency)
 
-        last2 = argmin(lambda n: distance_fn(n.config, last1.config), tree2)
-        extend2 = list(asymmetric_extend(last2.config, last1.config, extend_fn, not swap))
-        safe2 = list(takewhile(negate(collision_fn), extend2))
-        for i, q in enumerate(safe2):
-            if (i % tree_frequency == 0) or (i == len(safe2) - 1):
-                last2 = TreeNode(q, parent=last2)
-                tree2.append(last2)
-
-        if len(extend2) == len(safe2):
+        if success:
             path1, path2 = last1.retrace(), last2.retrace()
             if swap:
                 path1, path2 = path2, path1
