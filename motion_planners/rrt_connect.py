@@ -1,8 +1,10 @@
 import time
 
+from itertools import takewhile
+
 from .smoothing import smooth_path
 from .rrt import TreeNode, configs
-from .utils import irange, argmin, RRT_ITERATIONS, RRT_RESTARTS, RRT_SMOOTHING, INF, elapsed_time
+from .utils import irange, argmin, RRT_ITERATIONS, RRT_RESTARTS, RRT_SMOOTHING, INF, elapsed_time, negate
 
 def asymmetric_extend(q1, q2, extend_fn, backward=False):
     if backward:
@@ -28,22 +30,21 @@ def rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
 
         last1 = argmin(lambda n: distance_fn(n.config, s), tree1)
         extend1 = list(asymmetric_extend(last1.config, s, extend_fn, swap))
-        for i, q in enumerate(extend1):
-            if collision_fn(q):
-                break
-            if (i % tree_frequency == 0) or (i == len(extend1) - 1):
+        safe1 = list(takewhile(negate(collision_fn), extend1))
+        for i, q in enumerate(safe1):
+            if (i % tree_frequency == 0) or (i == len(safe1) - 1):
                 last1 = TreeNode(q, parent=last1)
                 tree1.append(last1)
 
         last2 = argmin(lambda n: distance_fn(n.config, last1.config), tree2)
-        extend2 = asymmetric_extend(last2.config, last1.config, extend_fn, not swap)
-        for i, q in enumerate(extend2):
-            if collision_fn(q):
-                break
-            if (i % tree_frequency == 0) or (i == len(extend2) - 1):
+        extend2 = list(asymmetric_extend(last2.config, last1.config, extend_fn, not swap))
+        safe2 = list(takewhile(negate(collision_fn), extend2))
+        for i, q in enumerate(safe2):
+            if (i % tree_frequency == 0) or (i == len(safe2) - 1):
                 last2 = TreeNode(q, parent=last2)
                 tree2.append(last2)
-        else:
+
+        if len(extend2) == len(safe2):
             path1, path2 = last1.retrace(), last2.retrace()
             if swap:
                 path1, path2 = path2, path1

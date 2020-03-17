@@ -18,7 +18,12 @@ def irange(start, stop=None, step=1):  # np.arange
         start += step
 
 
+def negate(test):
+    return lambda *args, **kwargs: not test(*args, **kwargs)
+
+
 def argmin(function, sequence):
+    # TODO: use min
     values = list(sequence)
     scores = [function(x) for x in values]
     return values[scores.index(min(scores))]
