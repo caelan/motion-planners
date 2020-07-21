@@ -1,6 +1,8 @@
 # motion-planners
 Python implementations of several robotic motion planners
 
+## Algorithms
+
 Sampling-based:
 * Probabilistic Roadmap (PRM)
 * Rapidly-Exploring Random Tree (RRT)
@@ -12,3 +14,7 @@ Sampling-based:
 Grid search
 * Breadth-First Search (BFS)
 * A*
+
+## Citation
+
+Caelan Reed Garrett. Motion Planners. https://github.com/caelan/motion-planners. 2017.
