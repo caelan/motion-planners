@@ -1,44 +1,23 @@
 from __future__ import print_function
 
-import cProfile
-import os
-import pstats
-
 import numpy as np
+import math
 
-from examples.motion.viewer import sample_box, get_distance, is_collision_free, \
+from motion_planners.tkinter.viewer import sample_box, get_distance, is_collision_free, \
     create_box, draw_solution, draw_roadmap, draw_environment
-from pddlstream.algorithms.incremental import solve_incremental
-from pddlstream.language.generator import from_gen_fn, from_test
-from pddlstream.utils import read, user_input, str_from_object, INF
-from pddlstream.language.constants import PDDLProblem, print_solution
-from pddlstream.algorithms.constraints import PlanConstraints
+from motion_planners.utils import user_input, INF
+from motion_planners.rrt_connect import birrt
+from motion_planners.prm import DegreePRM
 
+##################################################
 
 ARRAY = np.array # No hashing
 #ARRAY = list # No hashing
 #ARRAY = tuple # Hashing
 
-def create_problem(goal, obstacles=(), regions={}, max_distance=.5):
-    directory = os.path.dirname(os.path.abspath(__file__))
-    domain_pddl = read(os.path.join(directory, 'domain.pddl'))
-    stream_pddl = read(os.path.join(directory, 'stream.pddl'))
-    constant_map = {}
-
-    q0 = ARRAY([0, 0])
-    init = [
-        ('Conf', q0),
-        ('AtConf', q0),
-    ] + [('Region', r) for r in regions]
-
-    if isinstance(goal, str):
-        goal = ('In', goal)
-    else:
-        init += [('Conf', goal)]
-        goal = ('AtConf', goal)
-
-    np.set_printoptions(precision=3)
+def get_sample_fn(regions):
     samples = []
+
     def region_gen(region):
         lower, upper = regions[region]
         area = np.product(upper - lower)
@@ -47,34 +26,33 @@ def create_problem(goal, obstacles=(), regions={}, max_distance=.5):
             q = ARRAY(sample_box(regions[region]))
             samples.append(q)
             yield (q,)
+    return region_gen, samples
 
-    # http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.419.5503&rep=rep1&type=pdf
-    #d = 2
-    #vol_free = (1 - 0) * (1 - 0)
-    #vol_ball = math.pi * (1 ** 2)
-    #gamma = 2 * ((1 + 1. / d) * (vol_free / vol_ball)) ** (1. / d)
-
+def get_connected_test(obstacles, max_distance=0.5): # max_distance = 0.25 # 0.2 | 0.25 | 0.5 | 1.0
     roadmap = []
+
     def connected_test(q1, q2):
         #n = len(samples)
         #threshold = gamma * (math.log(n) / n) ** (1. / d)
         threshold = max_distance
-        are_connected = (get_distance(q1, q2) <= threshold) and \
-                is_collision_free((q1, q2), obstacles)
+        are_connected = (get_distance(q1, q2) <= threshold) and is_collision_free((q1, q2), obstacles)
         if are_connected:
             roadmap.append((q1, q2))
         return are_connected
+    return connected_test, roadmap
 
-    stream_map = {
-        'sample-region': from_gen_fn(region_gen),
-        'connect':  from_test(connected_test),
-        'distance': get_distance,
-    }
+def get_threshold_fn():
+    # http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.419.5503&rep=rep1&type=pdf
+    d = 2
+    vol_free = (1 - 0) * (1 - 0)
+    vol_ball = math.pi * (1 ** 2)
+    gamma = 2 * ((1 + 1. / d) * (vol_free / vol_ball)) ** (1. / d)
+    threshold_fn = lambda n: gamma * (math.log(n) / n) ** (1. / d)
+    return threshold_fn
 
-    problem = PDDLProblem(domain_pddl, constant_map, stream_pddl, stream_map, init, goal)
-
-    return problem, samples, roadmap
-
+def solve_birrt(q1, q2, **kwargs):
+    return birrt(start_positions, end_positions, distance=get_distance, sample=sample_fn,
+                 extend=extend_fn, collision=collision_fn, **kwargs)
 
 ##################################################
 
@@ -84,34 +62,30 @@ def main(max_time=20):
     """
     Creates and solves the 2D motion planning problem.
     """
+    # https://github.com/caelan/pddlstream/blob/master/examples/motion/run.py
+
+    np.set_printoptions(precision=3)
 
     obstacles = [
-        create_box((.5, .5), (.2, .2))
+        create_box((.5, .5), (.25, .25))
     ]
     regions = {
-        'env': create_box((.5, .5), (1, 1)),
-        'green': create_box((.8, .8), (.4, .4)),
+        'env': create_box((.5, .5), (1., 1.)),
+        'green': create_box((.8, .8), (.1, .1)),
     }
 
+    q0 = ARRAY([0, 0])
     goal = 'green'
     if goal not in regions:
         goal = ARRAY([1, 1])
 
-    max_distance = 0.25 # 0.2 | 0.25 | 0.5 | 1.0
-    problem, samples, roadmap = create_problem(goal, obstacles, regions, max_distance=max_distance)
-    print('Initial:', str_from_object(problem.init))
-    print('Goal:', str_from_object(problem.goal))
-    constraints = PlanConstraints(max_cost=1.25) # max_cost=INF)
+    region_gen, samples = get_sample_fn(regions)
+    connected_test, roadmap = get_connected_test(obstacles)
 
-    pr = cProfile.Profile()
-    pr.enable()
-    solution = solve_incremental(problem, constraints=constraints, unit_costs=False, success_cost=0,
-                                 max_time=max_time, verbose=False)
-    pr.disable()
-    pstats.Stats(pr).sort_stats('tottime').print_stats(10)
+    #path = birrt(start_positions, end_positions, distance=get_distance, sample=sample_fn,
+    #             extend=extend_fn, collision=collision_fn, **kwargs)
+    #prm = DegreePRM(distance=get_distance, )
 
-    print_solution(solution)
-    plan, cost, evaluations = solution
     #viewer = draw_environment(obstacles, regions)
     #for sample in samples:
     #    viewer.draw_point(sample)
@@ -121,9 +95,9 @@ def main(max_time=20):
     draw_roadmap(roadmap, obstacles, regions) # TODO: do this in realtime
     user_input('Continue?')
 
-    if plan is None:
-        return
-    segments = [args for name, args in plan]
+    #if plan is None:
+    #    return
+    #segments = [args for name, args in plan]
     draw_solution(segments, obstacles, regions)
     user_input('Finish?')
 

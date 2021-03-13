@@ -5,6 +5,10 @@ except ModuleNotFoundError:
 
 import numpy as np
 
+from collections import namedtuple
+
+Box = namedtuple('Box', ['lower', 'upper'])
+Circle = namedtuple('Circle', ['center', 'radius'])
 
 class PRMViewer(object):
     def __init__(self, width=500, height=500, title='PRM', background='tan'):
@@ -74,29 +78,22 @@ def sample_line(segment, step_size=.02):
         yield tuple(np.array(q1) + l * diff / dist)
     yield q2
 
-
 def line_collides(line, box):  # TODO - could also compute this exactly
     return any(contains(p, box) for p in sample_line(line))
 
-
 def is_collision_free(line, boxes):
     return not any(line_collides(line, box) for box in boxes)
-
 
 def create_box(center, extents):
     (x, y) = center
     (w, h) = extents
     lower = (x - w / 2., y - h / 2.)
     upper = (x + w / 2., y + h / 2.)
-    return np.array(lower), np.array(upper)
-
+    return Box(np.array(lower), np.array(upper))
 
 def sample_box(box):
     (lower, upper) = box
     return np.random.random(2) * (upper - lower) + lower
-
-def inf_sequence():
-    return iter(int, 1)
 
 def draw_environment(obstacles, regions):
     viewer = PRMViewer()
@@ -116,7 +113,6 @@ def draw_solution(segments, obstacles, regions):
         #for p in [p1, p2]:
         for p in sample_line(line):
             viewer.draw_point(p, radius=2)
-
 
 def draw_roadmap(roadmap, obstacles, regions):
     viewer = draw_environment(obstacles, regions)

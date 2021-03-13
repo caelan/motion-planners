@@ -2,10 +2,10 @@ from collections import namedtuple, Mapping
 from heapq import heappop, heappush
 import operator
 
-from .utils import INF, pairs, merge_dicts, flatten
+from motion_planners.utils import INF, pairs, merge_dicts, flatten
 
 
-# TODO - Lazy-PRM, Visibility-PRM, PRM*
+# TODO - Visibility-PRM, PRM*
 
 class Vertex(object):
 
@@ -71,6 +71,8 @@ class Edge(object):
     def __str__(self):
         return 'Edge(' + str(self.v1.q) + ' - ' + str(self.v2.q) + ')'
     __repr__ = __str__
+
+##################################################
 
 SearchNode = namedtuple('SearchNode', ['cost', 'parent'])
 
@@ -227,9 +229,9 @@ class DegreePRM(PRM):
             return new_vertices
         for v1 in new_vertices:
             degree = 0
-            for _, v2 in sorted(filter(lambda (d, v2): v2 != v1 and d <= self.connect_distance,
-                                       map(lambda v: (self.distance(v1.q, v.q), v), self.vertices.values())),  # TODO - slow, use nearest neighbors
-                                key=operator.itemgetter(0)):
+            for _, v2 in sorted(filter(lambda pair: pair[1] != v1 and pair[0] <= self.connect_distance,
+                                       map(lambda v: (self.distance(v1.q, v.q), v), self.vertices.values())),
+                                key=operator.itemgetter(0)): # TODO - slow, use nearest neighbors
                 if self.target_degree <= degree:
                     break
                 if v2 not in v1.edges:

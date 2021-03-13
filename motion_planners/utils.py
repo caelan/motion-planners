@@ -1,12 +1,21 @@
 from random import shuffle
 from itertools import islice
 import time
+import contextlib
+import pstats
+import cProfile
 
 INF = float('inf')
 
 RRT_ITERATIONS = 20
 RRT_RESTARTS = 2
 RRT_SMOOTHING = 20
+
+
+try:
+   user_input = raw_input
+except NameError:
+   user_input = input
 
 
 def irange(start, stop=None, step=1):  # np.arange
@@ -46,6 +55,7 @@ def flatten(iterable_of_iterables):
 
 
 def randomize(sequence):
+    sequence = list(sequence)
     shuffle(sequence)
     return sequence
 
@@ -53,7 +63,7 @@ def randomize(sequence):
 def take(iterable, n=INF):
     if n == INF:
         n = None  # NOTE - islice takes None instead of INF
-    elif n == None:
+    elif n is None:
         n = 0  # NOTE - for some of the uses
     return islice(iterable, n)
 
@@ -66,3 +76,16 @@ def enum(*sequential, **named):
 
 def elapsed_time(start_time):
     return time.time() - start_time
+
+
+@contextlib.contextmanager
+def profiler(field='cumtime', num=10):
+    pr = cProfile.Profile()
+    pr.enable()
+    yield
+    pr.disable()
+    pstats.Stats(pr).sort_stats(field).print_stats(num) # cumtime | tottime
+
+
+def inf_sequence():
+    return iter(int, 1)
