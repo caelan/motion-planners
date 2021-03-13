@@ -79,7 +79,7 @@ def elapsed_time(start_time):
 
 
 @contextlib.contextmanager
-def profiler(field='cumtime', num=10):
+def profiler(field='tottime', num=10):
     pr = cProfile.Profile()
     pr.enable()
     yield

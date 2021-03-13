@@ -1,7 +1,9 @@
 try:
     from Tkinter import Tk, Canvas, Toplevel, LAST
+    #import TKinter as tk
 except ModuleNotFoundError:
     from tkinter import Tk, Canvas, Toplevel, LAST
+    #import tkinter as tk
 
 import numpy as np
 
@@ -29,13 +31,13 @@ class PRMViewer(object):
 
     def draw_point(self, point, radius=5, color='black'):
         (x, y) = self.pixel_from_point(point)
-        self.canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill=color)
+        self.canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill=color, outline='')
 
     def draw_line(self, segment, color='black'):
         (point1, point2) = segment
         (x1, y1) = self.pixel_from_point(point1)
         (x2, y2) = self.pixel_from_point(point2)
-        self.canvas.create_line(x1, y1, x2, y2, fill=color, width=2)
+        self.canvas.create_line(x1, y1, x2, y2, fill=color, width=1)
 
     def draw_arrow(self, point1, point2, color='black'):
         (x1, y1) = self.pixel_from_point(point1)
@@ -67,7 +69,8 @@ def get_distance(q1, q2):
 
 def contains(q, box):
     (lower, upper) = box
-    return np.greater_equal(q, lower).all() and np.greater_equal(upper, q).all()
+    return np.greater_equal(q, lower).all() and \
+           np.greater_equal(upper, q).all()
     #return np.all(q >= lower) and np.all(upper >= q)
 
 def point_collides(point, boxes):
@@ -94,9 +97,17 @@ def create_box(center, extents):
     upper = (x + w / 2., y + h / 2.)
     return Box(np.array(lower), np.array(upper))
 
+def get_box_center(box):
+    lower, upper = box
+    return np.average([lower, upper], axis=0)
+
+def get_box_extent(box):
+    lower, upper = box
+    return get_delta(lower, upper)
+
 def sample_box(box):
     (lower, upper) = box
-    return np.random.random(2) * (upper - lower) + lower
+    return np.random.random(len(lower)) * get_box_extent(box) + lower
 
 #################################################################
 
@@ -109,17 +120,27 @@ def draw_environment(obstacles, regions):
             viewer.draw_rectangle(region, color='green')
     return viewer
 
-def draw_solution(segments, obstacles, regions):
-    viewer = draw_environment(obstacles, regions)
+def add_segments(viewer, segments, **kwargs):
     if segments is None:
         return
     for line in segments:
-        viewer.draw_line(line)
+        viewer.draw_line(line, **kwargs)
         #for p in [p1, p2]:
         for p in sample_line(line):
-            viewer.draw_point(p, radius=2)
+            viewer.draw_point(p, radius=2, **kwargs)
+
+def draw_solution(segments, obstacles, regions):
+    viewer = draw_environment(obstacles, regions)
+    add_segments(viewer, segments)
+
+def add_roadmap(viewer, roadmap, **kwargs):
+    for line in roadmap:
+        viewer.draw_line(line, **kwargs)
 
 def draw_roadmap(roadmap, obstacles, regions):
     viewer = draw_environment(obstacles, regions)
-    for line in roadmap:
-        viewer.draw_line(line)
+    add_roadmap(viewer, roadmap)
+
+def add_points(viewer, points, **kwargs):
+    for sample in points:
+        viewer.draw_point(sample, **kwargs)

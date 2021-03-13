@@ -2,6 +2,7 @@ from random import randint
 
 
 def smooth_path(path, extend, collision, iterations=50):
+    # TODO: only sample pairs not on the same linear segment
     smoothed_path = path
     for _ in range(iterations):
         if len(smoothed_path) <= 2:
