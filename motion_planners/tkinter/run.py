@@ -75,7 +75,7 @@ def get_extend_fn(obstacles=[]):
 
 # TODO: algorithms that take advantage of metric space (RRT)
 
-def main(max_time=20):
+def main(num_restarts=10):
     """
     Creates and solves the 2D motion planning problem.
     """
@@ -106,21 +106,29 @@ def main(max_time=20):
 
     #########################
 
-    sample_fn, samples = get_sample_fn(regions['env'])
     #connected_test, roadmap = get_connected_test(obstacles)
     collision_fn = get_collision_fn(obstacles)
     distance_fn = get_distance
-    extend_fn, roadmap = get_extend_fn(obstacles=obstacles) # obstacles | []
 
-    with profiler():      
-        path = rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
-                           iterations=1000, tree_frequency=1, max_time=INF) #, **kwargs)
-        #path = birrt(start, goal, distance=distance_fn, sample=sample_fn,
-        #             extend=extend_fn, collision=collision_fn, smooth=1000) #, **kwargs)
+    plans = []
+    with profiler():
+        for _ in range(num_restarts):
+            sample_fn, samples = get_sample_fn(regions['env'])
+            extend_fn, roadmap = get_extend_fn(obstacles=obstacles)  # obstacles | []
+            path = rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
+                               iterations=1000, tree_frequency=1, max_time=INF) #, **kwargs)
+            #path = birrt(start, goal, distance=distance_fn, sample=sample_fn,
+            #             extend=extend_fn, collision=collision_fn, smooth=1000) #, **kwargs)
+            if path is None:
+                continue
 
-        #samples = list(islice(region_gen('env'), 100))
-        #prm = DegreePRM(distance=get_distance, extend=None, collision=get_collision_fn(obstacles),
-        #                samples=samples, connect_distance=.25)
+            #samples = list(islice(region_gen('env'), 100))
+            #prm = DegreePRM(distance=get_distance, extend=None, collision=get_collision_fn(obstacles),
+            #                samples=samples, connect_distance=.25)
+            extend_fn, _ = get_extend_fn(obstacles=obstacles)  # obstacles | []
+            smoothed = smooth_path(path, extend_fn, collision_fn, iterations=100)
+            plans.append((path, smoothed))
+    samples = roadmap = []
 
     #########################
 
@@ -131,16 +139,15 @@ def main(max_time=20):
         user_input('Finish?')
         return
 
-    segments = list(pairs(path))
-    print('Distance: {:.3f}'.format(sum(distance_fn(*pair) for pair in segments)))
-    add_segments(viewer, segments, color='green')
+    for path, smoothed in plans:
+        segments = list(pairs(path))
+        print('Distance: {:.3f}'.format(sum(distance_fn(*pair) for pair in segments)))
+        add_segments(viewer, segments, color='green')
 
-    extend_fn, roadmap = get_extend_fn(obstacles=obstacles) # obstacles | []
-    path = smooth_path(path, extend_fn, collision_fn, iterations=100)
-    segments = list(pairs(path))
-    print('Distance: {:.3f}'.format(sum(distance_fn(*pair) for pair in segments)))
+        segments = list(pairs(smoothed))
+        print('Distance: {:.3f}'.format(sum(distance_fn(*pair) for pair in segments)))
+        add_segments(viewer, segments, color='red')
 
-    add_segments(viewer, segments, color='red')
     user_input('Finish?')
 
 
