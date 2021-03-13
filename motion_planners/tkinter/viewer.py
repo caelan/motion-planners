@@ -27,20 +27,20 @@ class PRMViewer(object):
         # return (int(x*self.width), int(self.height - y*self.height))
         return (x * self.width, self.height - y * self.height)
 
-    def draw_point(self, point, radius=5):
+    def draw_point(self, point, radius=5, color='black'):
         (x, y) = self.pixel_from_point(point)
-        self.canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill='black')
+        self.canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill=color)
 
-    def draw_line(self, segment):
+    def draw_line(self, segment, color='black'):
         (point1, point2) = segment
         (x1, y1) = self.pixel_from_point(point1)
         (x2, y2) = self.pixel_from_point(point2)
-        self.canvas.create_line(x1, y1, x2, y2, fill='black', width=2)
+        self.canvas.create_line(x1, y1, x2, y2, fill=color, width=2)
 
-    def draw_arrow(self, point1, point2):
+    def draw_arrow(self, point1, point2, color='black'):
         (x1, y1) = self.pixel_from_point(point1)
         (x2, y2) = self.pixel_from_point(point2)
-        self.canvas.create_line(x1, y1, x2, y2, fill='black', width=2, arrow=LAST)
+        self.canvas.create_line(x1, y1, x2, y2, fill=color, width=2, arrow=LAST)
 
     def draw_rectangle(self, box, width=2, color='brown'):
         (point1, point2) = box
@@ -70,6 +70,9 @@ def contains(q, box):
     return np.greater_equal(q, lower).all() and np.greater_equal(upper, q).all()
     #return np.all(q >= lower) and np.all(upper >= q)
 
+def point_collides(point, boxes):
+    return any(contains(point, box) for box in boxes)
+
 def sample_line(segment, step_size=.02):
     (q1, q2) = segment
     diff = get_delta(q1, q2)
@@ -79,7 +82,7 @@ def sample_line(segment, step_size=.02):
     yield q2
 
 def line_collides(line, box):  # TODO - could also compute this exactly
-    return any(contains(p, box) for p in sample_line(line))
+    return any(point_collides(point, boxes=[box]) for point in sample_line(line))
 
 def is_collision_free(line, boxes):
     return not any(line_collides(line, box) for box in boxes)
@@ -94,6 +97,8 @@ def create_box(center, extents):
 def sample_box(box):
     (lower, upper) = box
     return np.random.random(2) * (upper - lower) + lower
+
+#################################################################
 
 def draw_environment(obstacles, regions):
     viewer = PRMViewer()

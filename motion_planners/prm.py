@@ -166,6 +166,9 @@ class PRM(Roadmap):
         self.collision = collision
         self.grow(samples)
 
+    def grow(self, samples):
+        raise NotImplementedError()
+
     def __call__(self, q1, q2):
         self.grow([q1, q2])
         if q1 not in self or q2 not in self:
