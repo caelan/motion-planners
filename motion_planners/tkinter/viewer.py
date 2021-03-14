@@ -9,6 +9,8 @@ import numpy as np
 
 from collections import namedtuple
 
+from motion_planners.utils import pairs
+
 Box = namedtuple('Box', ['lower', 'upper'])
 Circle = namedtuple('Circle', ['center', 'radius'])
 
@@ -128,6 +130,10 @@ def add_segments(viewer, segments, **kwargs):
         #for p in [p1, p2]:
         for p in sample_line(line):
             viewer.draw_point(p, radius=2, **kwargs)
+
+def add_path(viewer, path, **kwargs):
+    segments = list(pairs(path))
+    return add_segments(viewer, segments, **kwargs)
 
 def draw_solution(segments, obstacles, regions):
     viewer = draw_environment(obstacles, regions)

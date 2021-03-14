@@ -89,3 +89,9 @@ def profiler(field='tottime', num=10):
 
 def inf_sequence():
     return iter(int, 1)
+
+
+def compute_path_cost(path, cost_fn):
+    if path is None:
+        return INF
+    return sum(cost_fn(*pair) for pair in pairs(path))

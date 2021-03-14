@@ -1,10 +1,15 @@
 from random import randint
+from motion_planners.utils import INF, elapsed_time, irange
 
+import time
 
-def smooth_path(path, extend, collision, iterations=50):
+def smooth_path(path, extend, collision, iterations=50, max_tine=INF):
     # TODO: only sample pairs not on the same linear segment
+    start_time = time.time()
     smoothed_path = path
-    for _ in range(iterations):
+    for _ in irange(iterations):
+        if elapsed_time(start_time) > max_tine:
+            break
         if len(smoothed_path) <= 2:
             return smoothed_path
         i = randint(0, len(smoothed_path) - 1)

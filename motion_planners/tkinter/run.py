@@ -4,12 +4,12 @@ import numpy as np
 import math
 import time
 
-from itertools import islice
+from itertools import islice, combinations, product
 
 from motion_planners.tkinter.viewer import sample_box, get_distance, is_collision_free, \
     create_box, draw_solution, draw_roadmap, draw_environment, point_collides, sample_line, add_points, \
-    add_segments, add_roadmap, get_box_center
-from motion_planners.utils import user_input, pairs, profiler, irange, elapsed_time, INF
+    add_segments, add_roadmap, get_box_center, add_path
+from motion_planners.utils import user_input, pairs, profiler, irange, elapsed_time, INF, compute_path_cost
 from motion_planners.rrt_connect import birrt, direct_path, rrt_connect, smooth_path
 
 
@@ -75,7 +75,24 @@ def get_extend_fn(obstacles=[]):
 
 # TODO: algorithms that take advantage of metric space (RRT)
 
-def main(num_restarts=10):
+def score_portfolio(portfolio):
+    scores = INF
+    for path1, path2 in combinations(portfolio, r=2):
+        differences = [get_distance(q1, q2) for q1, q2 in product(path1, path2)]
+        scores = min(scores, np.median(differences))
+    return scores
+
+def select_portfolio(candidates, k=4):
+    best_portfolios, best_score = [], INF
+    for portfolio in combinations(candidates, r=k):
+        score = score_portfolio(portfolio)
+        if score < best_score:
+            best_portfolios, best_score = portfolio, score
+    return best_portfolios
+
+##################################################
+
+def main(num_restarts=10, max_time=1):
     """
     Creates and solves the 2D motion planning problem.
     """
@@ -112,11 +129,12 @@ def main(num_restarts=10):
 
     plans = []
     with profiler():
+        # TODO: cost bound & best cost
         for _ in range(num_restarts):
             sample_fn, samples = get_sample_fn(regions['env'])
             extend_fn, roadmap = get_extend_fn(obstacles=obstacles)  # obstacles | []
             path = rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
-                               iterations=1000, tree_frequency=1, max_time=INF) #, **kwargs)
+                               iterations=100, tree_frequency=1, max_time=1) #, **kwargs)
             #path = birrt(start, goal, distance=distance_fn, sample=sample_fn,
             #             extend=extend_fn, collision=collision_fn, smooth=1000) #, **kwargs)
             if path is None:
@@ -126,9 +144,11 @@ def main(num_restarts=10):
             #prm = DegreePRM(distance=get_distance, extend=None, collision=get_collision_fn(obstacles),
             #                samples=samples, connect_distance=.25)
             extend_fn, _ = get_extend_fn(obstacles=obstacles)  # obstacles | []
-            smoothed = smooth_path(path, extend_fn, collision_fn, iterations=100)
+            smoothed = smooth_path(path, extend_fn, collision_fn, iterations=INF, max_tine=max_time)
             plans.append((path, smoothed))
     samples = roadmap = []
+
+    #smoothed_plans = [smoothed for _, smoothed in plans]
 
     #########################
 
@@ -140,13 +160,11 @@ def main(num_restarts=10):
         return
 
     for path, smoothed in plans:
-        segments = list(pairs(path))
-        print('Distance: {:.3f}'.format(sum(distance_fn(*pair) for pair in segments)))
-        add_segments(viewer, segments, color='green')
+        print('Distance: {:.3f}'.format(compute_path_cost(path, distance_fn)))
+        add_path(viewer, path, color='green')
 
-        segments = list(pairs(smoothed))
-        print('Distance: {:.3f}'.format(sum(distance_fn(*pair) for pair in segments)))
-        add_segments(viewer, segments, color='red')
+        print('Distance: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
+        add_path(viewer, smoothed, color='red')
 
     user_input('Finish?')
 
