@@ -1,7 +1,9 @@
+from __future__ import print_function
+
 from random import random
 from time import time
 
-from .utils import INF, argmin
+from .utils import INF, argmin, elapsed_time
 
 
 class OptimalNode(object):
@@ -91,7 +93,9 @@ def rrt_star(start, goal, distance, sample, extend, collision, radius, max_time=
         if informed and goal_n is not None and distance(start, s) + distance(s, goal) >= goal_n.cost:
             continue
         if it % 100 == 0:
-            print it, time() - t0, goal_n is not None, do_goal, (goal_n.cost if goal_n is not None else INF)
+            success = goal_n is not None
+            cost = goal_n.cost if success else INF
+            print(it, elapsed_time(t0), success, do_goal, cost)
         it += 1
 
         nearest = argmin(lambda n: distance(n.config, s), nodes)

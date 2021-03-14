@@ -2,9 +2,12 @@ import time
 
 from itertools import takewhile
 
+from motion_planners.meta import direct_path
 from .smoothing import smooth_path
 from .rrt import TreeNode, configs
-from .utils import irange, argmin, RRT_ITERATIONS, RRT_RESTARTS, RRT_SMOOTHING, INF, elapsed_time, negate
+from .utils import irange, argmin, RRT_ITERATIONS, RRT_RESTARTS, RRT_SMOOTHING, INF, elapsed_time, \
+    negate
+
 
 def asymmetric_extend(q1, q2, extend_fn, backward=False):
     if backward:
@@ -50,17 +53,7 @@ def rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
             return configs(path1[:-1] + path2[::-1])
     return None
 
-# TODO: version which checks whether the segment is valid
-
-def direct_path(q1, q2, extend_fn, collision_fn):
-    if collision_fn(q1) or collision_fn(q2):
-        return None
-    path = [q1]
-    for q in extend_fn(q1, q2):
-        if collision_fn(q):
-            return None
-        path.append(q)
-    return path
+#################################################################
 
 def birrt(q1, q2, distance, sample, extend, collision,
           restarts=RRT_RESTARTS, smooth=RRT_SMOOTHING, max_time=INF, **kwargs):

@@ -10,7 +10,8 @@ from motion_planners.tkinter.viewer import sample_box, get_distance, is_collisio
     create_box, draw_solution, draw_roadmap, draw_environment, point_collides, sample_line, add_points, \
     add_segments, add_roadmap, get_box_center, add_path
 from motion_planners.utils import user_input, pairs, profiler, irange, elapsed_time, INF, compute_path_cost
-from motion_planners.rrt_connect import birrt, direct_path, rrt_connect, smooth_path, random_restarts, solve_and_smooth
+from motion_planners.rrt_connect import birrt, rrt_connect, smooth_path
+from motion_planners.meta import direct_path, random_restarts
 
 
 ##################################################
@@ -97,7 +98,7 @@ def select_portfolio(candidates, k=4):
 
 ##################################################
 
-def main(smooth=True, num_restarts=10, max_time=0.1):
+def main(smooth=True, num_restarts=1, max_time=0.1):
     """
     Creates and solves the 2D motion planning problem.
     """
@@ -123,7 +124,6 @@ def main(smooth=True, num_restarts=10, max_time=0.1):
         goal = get_box_center(regions[goal])
     else:
         goal = np.array([1., 1.])
-
     viewer = draw_environment(obstacles, regions)
 
     #########################
@@ -132,7 +132,7 @@ def main(smooth=True, num_restarts=10, max_time=0.1):
     collision_fn = get_collision_fn(obstacles)
     distance_fn = get_distance
 
-    plans = []
+    # samples = list(islice(region_gen('env'), 100))
     with profiler(field='cumtime'): # cumtime | tottime
         # TODO: cost bound & best cost
         for _ in range(num_restarts):
@@ -140,25 +140,22 @@ def main(smooth=True, num_restarts=10, max_time=0.1):
             extend_fn, roadmap = get_extend_fn(obstacles=obstacles)  # obstacles | []
             #path = rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
             #                   iterations=100, tree_frequency=1, max_time=1) #, **kwargs)
-            path = birrt(start, goal, distance=distance_fn, sample=sample_fn,
-                         extend=extend_fn, collision=collision_fn, smooth=100) #, smooth=1000, **kwargs)
+            #path = birrt(start, goal, distance=distance_fn, sample=sample_fn,
+            #             extend=extend_fn, collision=collision_fn, smooth=100) #, smooth=1000, **kwargs)
+            paths = random_restarts(rrt_connect, start, goal, distance_fn=distance_fn, sample_fn=sample_fn,
+                                    extend_fn=extend_fn, collision_fn=collision_fn, restarts=INF,
+                                    max_time=1, min_solutions=INF, smooth=100) #, smooth=1000, **kwargs)
+            path = paths[0] if paths else None
+
             if path is None:
                 continue
-
             print('Distance: {:.3f}'.format(compute_path_cost(path, distance_fn)))
             add_path(viewer, path, color='green')
-            if not smooth:
-                continue
 
-            #samples = list(islice(region_gen('env'), 100))
-            #prm = DegreePRM(distance=get_distance, extend=None, collision=get_collision_fn(obstacles),
-            #                samples=samples, connect_distance=.25)
-            extend_fn, _ = get_extend_fn(obstacles=obstacles)  # obstacles | []
-            smoothed = smooth_path(path, extend_fn, collision_fn, iterations=INF, max_tine=max_time)
-            print('Smoothed distance: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
-            add_path(viewer, smoothed, color='red')
-
-            plans.append((path, smoothed))
+            # extend_fn, _ = get_extend_fn(obstacles=obstacles)  # obstacles | []
+            # smoothed = smooth_path(path, extend_fn, collision_fn, iterations=INF, max_tine=max_time)
+            # print('Smoothed distance: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
+            # add_path(viewer, smoothed, color='red')
 
     #########################
 
