@@ -1,6 +1,10 @@
 # motion-planners
 Python implementations of several robotic motion planners
 
+## Citation
+
+Caelan Reed Garrett. Motion Planners. https://github.com/caelan/motion-planners. 2017.
+
 ## Algorithms
 
 Sampling-based:
@@ -14,7 +18,3 @@ Sampling-based:
 Grid search
 * Breadth-First Search (BFS)
 * A*
-
-## Citation
-
-Caelan Reed Garrett. Motion Planners. https://github.com/caelan/motion-planners. 2017.
