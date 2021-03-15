@@ -2,16 +2,14 @@ from __future__ import print_function
 
 import numpy as np
 import math
-import time
-
-from itertools import islice, combinations, product
 
 from motion_planners.tkinter.viewer import sample_box, get_distance, is_collision_free, \
-    create_box, draw_solution, draw_roadmap, draw_environment, point_collides, sample_line, add_points, \
-    add_segments, add_roadmap, get_box_center, add_path
-from motion_planners.utils import user_input, pairs, profiler, irange, elapsed_time, INF, compute_path_cost
-from motion_planners.rrt_connect import birrt, rrt_connect, smooth_path
-from motion_planners.meta import direct_path, random_restarts
+    create_box, draw_environment, point_collides, sample_line, add_points, \
+    add_roadmap, get_box_center, add_path, get_distance_fn
+from motion_planners.utils import user_input, profiler, INF, compute_path_cost
+from motion_planners.rrt_connect import rrt_connect
+from motion_planners.meta import random_restarts
+from motion_planners.diverse import score_portfolio, exhaustively_select_portfolio
 
 
 ##################################################
@@ -79,25 +77,6 @@ def get_extend_fn(obstacles=[]):
 
 ##################################################
 
-# TODO: algorithms that take advantage of metric space (RRT)
-
-def score_portfolio(portfolio):
-    scores = INF
-    for path1, path2 in combinations(portfolio, r=2):
-        differences = [get_distance(q1, q2) for q1, q2 in product(path1, path2)]
-        scores = min(scores, np.median(differences))
-    return scores
-
-def select_portfolio(candidates, k=4):
-    best_portfolios, best_score = [], INF
-    for portfolio in combinations(candidates, r=k):
-        score = score_portfolio(portfolio)
-        if score < best_score:
-            best_portfolios, best_score = portfolio, score
-    return best_portfolios
-
-##################################################
-
 def main(smooth=True, num_restarts=1, max_time=0.1):
     """
     Creates and solves the 2D motion planning problem.
@@ -130,7 +109,7 @@ def main(smooth=True, num_restarts=1, max_time=0.1):
 
     #connected_test, roadmap = get_connected_test(obstacles)
     collision_fn = get_collision_fn(obstacles)
-    distance_fn = get_distance
+    distance_fn = get_distance_fn(weights=[1, 1]) # distance_fn
 
     # samples = list(islice(region_gen('env'), 100))
     with profiler(field='cumtime'): # cumtime | tottime
@@ -145,12 +124,18 @@ def main(smooth=True, num_restarts=1, max_time=0.1):
             paths = random_restarts(rrt_connect, start, goal, distance_fn=distance_fn, sample_fn=sample_fn,
                                     extend_fn=extend_fn, collision_fn=collision_fn, restarts=INF,
                                     max_time=1, min_solutions=INF, smooth=100) #, smooth=1000, **kwargs)
-            path = paths[0] if paths else None
 
-            if path is None:
-                continue
-            print('Distance: {:.3f}'.format(compute_path_cost(path, distance_fn)))
-            add_path(viewer, path, color='green')
+            #path = paths[0] if paths else None
+            #if path is None:
+            #    continue
+            #paths = [path]
+
+            paths = exhaustively_select_portfolio(paths, k=2)
+            #print(score_portfolio(paths))
+
+            for path in paths:
+                print('Distance: {:.3f}'.format(compute_path_cost(path, distance_fn)))
+                add_path(viewer, path, color='green')
 
             # extend_fn, _ = get_extend_fn(obstacles=obstacles)  # obstacles | []
             # smoothed = smooth_path(path, extend_fn, collision_fn, iterations=INF, max_tine=max_time)
@@ -163,9 +148,9 @@ def main(smooth=True, num_restarts=1, max_time=0.1):
     add_roadmap(viewer, roadmap, color='black')
     add_points(viewer, samples, color='blue')
 
-    if path is None:
-        user_input('Finish?')
-        return
+    #if path is None:
+    #    user_input('Finish?')
+    #    return
 
     user_input('Finish?')
 

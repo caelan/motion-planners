@@ -150,3 +150,10 @@ def draw_roadmap(roadmap, obstacles, regions):
 def add_points(viewer, points, **kwargs):
     for sample in points:
         viewer.draw_point(sample, **kwargs)
+
+def get_distance_fn(weights):
+    difference_fn = get_delta
+    def fn(q1, q2):
+        diff = np.array(difference_fn(q2, q1))
+        return np.sqrt(np.dot(weights, diff * diff))
+    return fn
