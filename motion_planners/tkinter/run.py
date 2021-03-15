@@ -82,6 +82,8 @@ def main(smooth=True, num_restarts=1, max_time=0.1):
     Creates and solves the 2D motion planning problem.
     """
     # https://github.com/caelan/pddlstream/blob/master/examples/motion/run.py
+    # TODO: 3D work and CSpace
+    # TODO: visualize just the tool frame of an end effector
 
     np.set_printoptions(precision=3)
 
@@ -123,14 +125,14 @@ def main(smooth=True, num_restarts=1, max_time=0.1):
             #             extend=extend_fn, collision=collision_fn, smooth=100) #, smooth=1000, **kwargs)
             paths = random_restarts(rrt_connect, start, goal, distance_fn=distance_fn, sample_fn=sample_fn,
                                     extend_fn=extend_fn, collision_fn=collision_fn, restarts=INF,
-                                    max_time=2, min_solutions=INF, smooth=100) #, smooth=1000, **kwargs)
+                                    max_time=2, max_solutions=INF, smooth=100) #, smooth=1000, **kwargs)
 
             #path = paths[0] if paths else None
             #if path is None:
             #    continue
             #paths = [path]
 
-            paths = exhaustively_select_portfolio(paths, k=2)
+            #paths = exhaustively_select_portfolio(paths, k=2)
             #print(score_portfolio(paths))
 
             for path in paths:

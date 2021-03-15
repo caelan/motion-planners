@@ -44,7 +44,8 @@ def configs(nodes):
     return list(map(lambda n: n.config, nodes))
 
 
-def rrt(start, goal_sample, distance, sample, extend, collision, goal_test=lambda q: False, iterations=RRT_ITERATIONS, goal_probability=.2):
+def rrt(start, goal_sample, distance, sample, extend, collision, goal_test=lambda q: False,
+        iterations=RRT_ITERATIONS, goal_probability=.2):
     if collision(start):
         return None
     if not callable(goal_sample):
