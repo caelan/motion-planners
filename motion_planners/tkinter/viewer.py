@@ -9,7 +9,7 @@ import numpy as np
 
 from collections import namedtuple
 
-from motion_planners.utils import pairs
+from motion_planners.utils import pairs, get_delta
 
 Box = namedtuple('Box', ['lower', 'upper'])
 Circle = namedtuple('Circle', ['center', 'radius'])
@@ -62,12 +62,6 @@ class PRMViewer(object):
 
 
 #################################################################
-
-def get_delta(q1, q2):
-    return np.array(q2) - np.array(q1)
-
-def get_distance(q1, q2):
-    return np.linalg.norm(get_delta(q1, q2))
 
 def contains(q, box):
     (lower, upper) = box

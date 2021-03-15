@@ -3,10 +3,10 @@ from __future__ import print_function
 import numpy as np
 import math
 
-from motion_planners.tkinter.viewer import sample_box, get_distance, is_collision_free, \
+from motion_planners.tkinter.viewer import sample_box, is_collision_free, \
     create_box, draw_environment, point_collides, sample_line, add_points, \
     add_roadmap, get_box_center, add_path, get_distance_fn
-from motion_planners.utils import user_input, profiler, INF, compute_path_cost
+from motion_planners.utils import user_input, profiler, INF, compute_path_cost, get_distance
 from motion_planners.rrt_connect import rrt_connect
 from motion_planners.meta import random_restarts
 from motion_planners.diverse import score_portfolio, exhaustively_select_portfolio
@@ -123,7 +123,7 @@ def main(smooth=True, num_restarts=1, max_time=0.1):
             #             extend=extend_fn, collision=collision_fn, smooth=100) #, smooth=1000, **kwargs)
             paths = random_restarts(rrt_connect, start, goal, distance_fn=distance_fn, sample_fn=sample_fn,
                                     extend_fn=extend_fn, collision_fn=collision_fn, restarts=INF,
-                                    max_time=1, min_solutions=INF, smooth=100) #, smooth=1000, **kwargs)
+                                    max_time=2, min_solutions=INF, smooth=100) #, smooth=1000, **kwargs)
 
             #path = paths[0] if paths else None
             #if path is None:

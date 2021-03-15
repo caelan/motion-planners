@@ -5,6 +5,8 @@ import contextlib
 import pstats
 import cProfile
 
+import numpy as np
+
 INF = float('inf')
 
 RRT_ITERATIONS = 20
@@ -95,3 +97,11 @@ def compute_path_cost(path, cost_fn):
     if path is None:
         return INF
     return sum(cost_fn(*pair) for pair in pairs(path))
+
+
+def get_delta(q1, q2):
+    return np.array(q2) - np.array(q1)
+
+
+def get_distance(q1, q2):
+    return np.linalg.norm(get_delta(q1, q2))
