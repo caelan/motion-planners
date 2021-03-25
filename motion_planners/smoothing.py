@@ -30,7 +30,6 @@ def smooth_path(path, extend, collision, distance_fn=None, iterations=50, max_ti
     if distance_fn is None:
         distance_fn = get_distance
     waypoints = path
-    print(waypoints)
     for _ in irange(iterations):
         waypoints = waypoints_from_path(waypoints)
         if (elapsed_time(start_time) > max_tine) or (len(waypoints) <= 2):

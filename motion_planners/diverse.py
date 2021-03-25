@@ -46,7 +46,6 @@ def exhaustively_select_portfolio(candidates, k=10, **kwargs):
     best_portfolios, best_score = [], 0
     for portfolio in combinations(candidates, r=k):
         score = score_portfolio(portfolio, **kwargs)
-        print(score)
         if score > best_score:
             best_portfolios, best_score = portfolio, score
     return best_portfolios
