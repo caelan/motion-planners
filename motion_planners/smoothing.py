@@ -1,8 +1,9 @@
-from random import randint, choices, random
+from random import randint, random
 from motion_planners.utils import INF, elapsed_time, irange, waypoints_from_path, pairs, get_distance, \
     convex_combination, flatten
 
 import time
+import numpy as np
 
 def smooth_path_old(path, extend, collision, iterations=50, max_tine=INF):
     start_time = time.time()
@@ -38,8 +39,12 @@ def smooth_path(path, extend, collision, distance_fn=None, iterations=50, max_ti
         indices = list(range(len(waypoints)))
         segments = list(pairs(indices))
         distances = [distance_fn(waypoints[i], waypoints[j]) for i, j in segments]
+        probabilities = np.array(distances) / sum(distances)
 
-        segment1, segment2 = choices(segments, weights=distances, k=2)
+        #segment1, segment2 = choices(segments, weights=probabilities, k=2)
+        seg_indices = list(range(len(segments)))
+        seg_idx1, seg_idx2 = np.random.choice(seg_indices, size=2, replace=True, p=probabilities)
+        segment1, segment2 = segments[seg_idx1], segments[seg_idx2]
         if segment1 == segment2: # choices samples with replacement
             continue
         if segment2[1] <= segment1[0]:
