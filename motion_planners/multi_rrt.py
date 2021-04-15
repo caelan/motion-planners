@@ -2,7 +2,7 @@ from collections import Mapping
 from random import random
 
 from .rrt import TreeNode, configs
-from .utils import irange, argmin, pairs, randomize, take, enum
+from .utils import irange, argmin, get_pairs, randomize, take, enum
 
 ts = enum('ALL', 'SUCCESS', 'PATH', 'NONE')
 
@@ -135,7 +135,7 @@ class MultiBiRRT(MultiTree):
                     last1, last2 = last2, last1
 
                 path1, path2 = last1.retrace(), last2.retrace()[:-1][::-1]
-                for p, n in pairs(path2):
+                for p, n in get_pairs(path2):
                     n.parent = p
                 if len(path2) == 0:  # TODO - still some kind of circular error
                     for n in new_nodes2:

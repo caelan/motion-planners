@@ -1,19 +1,23 @@
 import time
 
-from motion_planners.smoothing import smooth_path
-from motion_planners.utils import RRT_RESTARTS, RRT_SMOOTHING, INF, irange, elapsed_time, compute_path_cost
+from .smoothing import smooth_path
+from .utils import RRT_RESTARTS, RRT_SMOOTHING, INF, irange, elapsed_time, compute_path_cost, traverse
 
 
 def direct_path(q1, q2, extend_fn, collision_fn):
     # TODO: version which checks whether the segment is valid
     if collision_fn(q1) or collision_fn(q2):
         return None
-    path = [q1]
-    for q in extend_fn(q1, q2):
-        if collision_fn(q):
-            return None
-        path.append(q)
+    path = [q1] + list(extend_fn(q1, q2))
+    if any(collision_fn(q) for q in traverse(path)):
+        return None
     return path
+    # path = [q1]
+    # for q in extend_fn(q1, q2):
+    #     if collision_fn(q):
+    #         return None
+    #     path.append(q)
+    # return path
 
 
 def random_restarts(solve_fn, q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,

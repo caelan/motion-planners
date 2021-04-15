@@ -2,8 +2,8 @@ import time
 
 from itertools import takewhile
 
-from motion_planners.meta import direct_path
-from .smoothing import smooth_path
+from .meta import direct_path
+from .smoothing import smooth_path, smooth_path_old
 from .rrt import TreeNode, configs
 from .utils import irange, argmin, RRT_ITERATIONS, RRT_RESTARTS, RRT_SMOOTHING, INF, elapsed_time, \
     negate
@@ -57,6 +57,7 @@ def rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
 
 def birrt(q1, q2, distance, sample, extend, collision,
           restarts=RRT_RESTARTS, smooth=RRT_SMOOTHING, max_time=INF, **kwargs):
+    # TODO: move to the meta class
     start_time = time.time()
     if collision(q1) or collision(q2):
         return None
@@ -64,6 +65,7 @@ def birrt(q1, q2, distance, sample, extend, collision,
     if path is not None:
         return path
     for attempt in irange(restarts + 1):
+        # TODO: use the restart wrapper
         if max_time <= elapsed_time(start_time):
             break
         path = rrt_connect(q1, q2, distance, sample, extend, collision,
@@ -72,5 +74,6 @@ def birrt(q1, q2, distance, sample, extend, collision,
             #print('{} attempts'.format(attempt))
             if smooth is None:
                 return path
-            return smooth_path(path, extend, collision, iterations=smooth)
+            #return smooth_path_old(path, extend, collision, iterations=smooth)
+            return smooth_path(path, extend, collision, distance_fn=distance, iterations=smooth)
     return None

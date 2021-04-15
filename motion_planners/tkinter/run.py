@@ -3,13 +3,13 @@ from __future__ import print_function
 import numpy as np
 import math
 
-from motion_planners.tkinter.viewer import sample_box, is_collision_free, \
+from .viewer import sample_box, is_collision_free, \
     create_box, draw_environment, point_collides, sample_line, add_points, \
     add_roadmap, get_box_center, add_path, get_distance_fn
-from motion_planners.utils import user_input, profiler, INF, compute_path_cost, get_distance
-from motion_planners.rrt_connect import rrt_connect
-from motion_planners.meta import random_restarts
-from motion_planners.diverse import score_portfolio, exhaustively_select_portfolio
+from ..utils import user_input, profiler, INF, compute_path_cost, get_distance
+from ..rrt_connect import rrt_connect
+from ..meta import random_restarts
+from ..diverse import score_portfolio, exhaustively_select_portfolio
 
 
 ##################################################

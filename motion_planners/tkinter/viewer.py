@@ -9,7 +9,7 @@ import numpy as np
 
 from collections import namedtuple
 
-from motion_planners.utils import pairs, get_delta
+from ..utils import get_pairs, get_delta, INF
 
 Box = namedtuple('Box', ['lower', 'upper'])
 Circle = namedtuple('Circle', ['center', 'radius'])
@@ -72,7 +72,7 @@ def contains(q, box):
 def point_collides(point, boxes):
     return any(contains(point, box) for box in boxes)
 
-def sample_line(segment, step_size=.02):
+def sample_line(segment, step_size=2e-2):
     (q1, q2) = segment
     diff = get_delta(q1, q2)
     dist = np.linalg.norm(diff)
@@ -116,17 +116,17 @@ def draw_environment(obstacles, regions):
             viewer.draw_rectangle(region, color='green')
     return viewer
 
-def add_segments(viewer, segments, **kwargs):
+def add_segments(viewer, segments, step_size=INF, **kwargs):
     if segments is None:
         return
     for line in segments:
         viewer.draw_line(line, **kwargs)
         #for p in [p1, p2]:
-        for p in sample_line(line):
+        for p in sample_line(line, step_size=step_size):
             viewer.draw_point(p, radius=2, **kwargs)
 
 def add_path(viewer, path, **kwargs):
-    segments = list(pairs(path))
+    segments = list(get_pairs(path))
     return add_segments(viewer, segments, **kwargs)
 
 def draw_solution(segments, obstacles, regions):

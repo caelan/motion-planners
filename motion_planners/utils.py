@@ -40,7 +40,7 @@ def argmin(function, sequence):
     return values[scores.index(min(scores))]
 
 
-def pairs(lst):
+def get_pairs(lst):
     return zip(lst[:-1], lst[1:])
 
 
@@ -60,6 +60,11 @@ def randomize(sequence):
     sequence = list(sequence)
     shuffle(sequence)
     return sequence
+
+
+def traverse(sequence, random=False):
+    # TODO: bisect
+    return randomize(sequence)
 
 
 def take(iterable, n=INF):
@@ -93,12 +98,6 @@ def inf_sequence():
     return iter(int, 1)
 
 
-def compute_path_cost(path, cost_fn):
-    if path is None:
-        return INF
-    return sum(cost_fn(*pair) for pair in pairs(path))
-
-
 def get_delta(q1, q2):
     return np.array(q2) - np.array(q1)
 
@@ -112,6 +111,12 @@ def get_unit_vector(vec):
     if norm == 0:
         return vec
     return np.array(vec) / norm
+
+
+def compute_path_cost(path, cost_fn=get_distance):
+    if path is None:
+        return INF
+    return sum(cost_fn(*pair) for pair in get_pairs(path))
 
 
 def remove_redundant(path, tolerance=1e-3):

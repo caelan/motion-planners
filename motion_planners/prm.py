@@ -2,7 +2,7 @@ from collections import namedtuple, Mapping
 from heapq import heappop, heappush
 import operator
 
-from motion_planners.utils import INF, pairs, merge_dicts, flatten
+from .utils import INF, get_pairs, merge_dicts, flatten
 
 
 # TODO - Visibility-PRM, PRM*
@@ -65,7 +65,7 @@ class Edge(object):
             return
         from manipulation.primitives.display import draw_edge
         #self._handle = draw_edge(env, self.v1.q, self.v2.q, color=color)
-        for q1, q2 in pairs(self.configs()):
+        for q1, q2 in get_pairs(self.configs()):
             self._handles.append(draw_edge(env, q1, q2, color=color))
 
     def __str__(self):
