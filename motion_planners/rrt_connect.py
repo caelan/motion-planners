@@ -75,5 +75,6 @@ def birrt(q1, q2, distance, sample, extend, collision,
             if smooth is None:
                 return path
             #return smooth_path_old(path, extend, collision, iterations=smooth)
-            return smooth_path(path, extend, collision, distance_fn=distance, iterations=smooth)
+            return smooth_path(path, extend, collision, distance_fn=distance, iterations=smooth,
+                               max_time=max_time - elapsed_time(start_time))
     return None
