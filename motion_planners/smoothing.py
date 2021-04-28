@@ -5,7 +5,7 @@ from .utils import INF, elapsed_time, irange, waypoints_from_path, get_pairs, ge
 import time
 import numpy as np
 
-def smooth_path_old(path, extend, collision, iterations=50, max_time=INF, verbose=False):
+def smooth_path_old(path, extend, collision, iterations=50, max_time=INF, verbose=False, **kwargs):
     assert (iterations < INF) or (max_time < INF)
     start_time = time.time()
     smoothed_path = path
@@ -43,6 +43,7 @@ def smooth_path(path, extend, collision, distance_fn=None, iterations=50, max_ti
         #waypoints = waypoints_from_path(waypoints)
         if (elapsed_time(start_time) > max_time) or (len(waypoints) <= 2):
             break
+        # TODO: smoothing in the same linear segment when circular
 
         indices = list(range(len(waypoints)))
         segments = list(get_pairs(indices))
@@ -73,3 +74,5 @@ def smooth_path(path, extend, collision, distance_fn=None, iterations=50, max_ti
             waypoints = new_waypoints
     #return waypoints
     return refine_waypoints(waypoints, extend)
+
+#smooth_path = smooth_path_old
