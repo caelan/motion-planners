@@ -5,6 +5,7 @@ import time
 import contextlib
 import pstats
 import cProfile
+import random
 
 import numpy as np
 
@@ -81,6 +82,7 @@ def is_odd(num):
 
 
 def bisect(sequence):
+    sequence = list(sequence)
     indices = set()
     queue = deque([(0, len(sequence)-1)])
     while queue:
@@ -186,6 +188,41 @@ def waypoints_from_path(path, tolerance=1e-3):
     waypoints.append(last_conf)
     return waypoints
 
+##################################################
 
 def convex_combination(x, y, w=0.5):
     return (1-w)*np.array(x) + w*np.array(y)
+
+
+def uniform_generator(d):
+    while True:
+        yield np.random.uniform(size=d)
+
+
+def halton_generator(d, seed=None):
+    import ghalton
+    if seed is None:
+        seed = random.randint(0, 1000)
+    #sequencer = ghalton.Halton(d)
+    sequencer = ghalton.GeneralizedHalton(d, seed)
+    #sequencer.reset()
+    while True:
+        [weights] = sequencer.get(1)
+        yield np.array(weights)
+
+def unit_generator(d, use_halton=False):
+    if use_halton:
+        try:
+            import ghalton
+        except ImportError:
+            print('ghalton is not installed (https://pypi.org/project/ghalton/)')
+            use_halton = False
+    return halton_generator(d) if use_halton else uniform_generator(d)
+
+
+def interval_generator(lower, upper, **kwargs):
+    assert len(lower) == len(upper)
+    assert np.less_equal(lower, upper).all()
+    if np.equal(lower, upper).all():
+        return iter([lower])
+    return (convex_combination(lower, upper, w=weights) for weights in unit_generator(d=len(lower), **kwargs))

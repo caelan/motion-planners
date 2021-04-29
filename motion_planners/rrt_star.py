@@ -81,6 +81,7 @@ def safe_path(sequence, collision):
         path.append(q)
     return path
 
+##################################################
 
 def rrt_star(start, goal, distance, sample, extend, collision, radius,
              max_time=INF, max_iterations=INF, goal_probability=.2, informed=True):
@@ -117,15 +118,16 @@ def rrt_star(start, goal, distance, sample, extend, collision, radius,
         neighbors = filter(lambda n: distance(n.config, new.config) < radius, nodes)
         nodes.append(new)
 
+        # TODO: smooth solution once found to improve the cost bound
         for n in neighbors:
             d = distance(n.config, new.config)
-            if n.cost + d < new.cost:
+            if (n.cost + d) < new.cost:
                 path = safe_path(extend(n.config, new.config), collision)
                 if (len(path) != 0) and (distance(new.config, path[-1]) < EPSILON):
                     new.rewire(n, d, path[:-1], iteration=iteration)
         for n in neighbors:  # TODO - avoid repeating work
             d = distance(new.config, n.config)
-            if new.cost + d < n.cost:
+            if (new.cost + d) < n.cost:
                 path = safe_path(extend(new.config, n.config), collision)
                 if (len(path) != 0) and (distance(n.config, path[-1]) < EPSILON):
                     n.rewire(new, d, path[:-1], iteration=iteration)

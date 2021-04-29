@@ -8,12 +8,14 @@ import time
 from .viewer import sample_box, is_collision_free, \
     create_box, draw_environment, point_collides, sample_line, add_points, \
     add_roadmap, get_box_center, add_path, get_distance_fn
-from ..utils import user_input, profiler, INF, compute_path_cost, get_distance, elapsed_time
+from ..utils import user_input, profiler, INF, compute_path_cost, get_distance, elapsed_time, interval_generator
 from ..prm import prm
 from ..lazy_prm import lazy_prm
 from ..rrt_connect import rrt_connect, birrt
 from ..rrt import rrt
 from ..rrt_star import rrt_star
+from ..smoothing import smooth_path
+from motion_planners.lattice import lattice
 from ..meta import random_restarts
 from ..diverse import score_portfolio, exhaustively_select_portfolio
 
@@ -24,19 +26,22 @@ ALGORITHMS = [
     rrt_connect,
     birrt,
     rrt_star,
+    lattice,
+    # TODO: https://ompl.kavrakilab.org/planners.html
 ]
 
 ##################################################
 
-def get_sample_fn(region, obstacles=[]):
+def get_sample_fn(region, obstacles=[], use_halton=True): #, check_collisions=False):
     samples = []
     collision_fn = get_collision_fn(obstacles)
+    lower, upper = region
+    generator = interval_generator(lower, upper, use_halton=use_halton)
 
     def region_gen():
-        #lower, upper = region
         #area = np.product(upper - lower) # TODO: sample proportional to area
-        while True:
-            q = sample_box(region)
+        for q in generator:
+            #q = sample_box(region)
             if collision_fn(q):
                 continue
             samples.append(q)
@@ -91,7 +96,7 @@ def get_extend_fn(obstacles=[]):
 
 ##################################################
 
-def main(smooth=True, max_time=0.1):
+def main():
     """
     Creates and solves the 2D motion planning problem.
     """
@@ -107,8 +112,8 @@ def main(smooth=True, max_time=0.1):
                         help='When enabled, draws the roadmap')
     parser.add_argument('-r', '--restarts', default=0, type=int,
                         help='The number of restarts.')
-    parser.add_argument('-s', '--smooth', action='store_false',
-                        help='When enabled, disables smoothing.')
+    parser.add_argument('-s', '--smooth', action='store_true',
+                        help='When enabled, smooths paths.')
     parser.add_argument('-t', '--time', default=1., type=float,
                         help='The maximum runtime.')
     args = parser.parse_args()
@@ -144,7 +149,7 @@ def main(smooth=True, max_time=0.1):
         # TODO: cost bound & best cost
         for _ in range(args.restarts+1):
             start_time = time.time()
-            sample_fn, samples = get_sample_fn(regions['env'])
+            sample_fn, samples = get_sample_fn(regions['env'], obstacles=[]) # obstacles
             extend_fn, roadmap = get_extend_fn(obstacles=obstacles)  # obstacles | []
 
             if args.algorithm == 'prm':
@@ -166,6 +171,8 @@ def main(smooth=True, max_time=0.1):
             elif args.algorithm == 'rrt_star':
                 path = rrt_star(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                                 radius=1, max_iterations=INF, max_time=args.time)
+            elif args.algorithm == 'lattice':
+                path = lattice(start, goal, distance_fn, extend_fn, collision_fn)
             else:
                 raise NotImplementedError(args.algorithm)
             paths = [] if path is None else [path]
@@ -181,14 +188,15 @@ def main(smooth=True, max_time=0.1):
                 path, distance_fn), 3)) for path in paths], elapsed_time(start_time)))
             for path in paths:
                 add_path(viewer, path, color='green')
-
-            # path = paths[0] if paths else None
-            if path is None:
+            if not args.smooth:
                 continue
-            # extend_fn, _ = get_extend_fn(obstacles=obstacles)  # obstacles | []
-            # smoothed = smooth_path(path, extend_fn, collision_fn, iterations=INF, max_tine=max_time)
-            # print('Smoothed distance: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
-            # add_path(viewer, smoothed, color='red')
+
+            # TODO: Gaussian sampling for narrow passages
+            for path in paths:
+                extend_fn, _ = get_extend_fn(obstacles=obstacles)  # obstacles | []
+                smoothed = smooth_path(path, extend_fn, collision_fn, iterations=INF, max_time=args.time)
+                print('Smoothed distance: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
+                add_path(viewer, smoothed, color='red')
 
     #########################
 

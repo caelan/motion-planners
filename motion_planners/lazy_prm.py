@@ -1,7 +1,7 @@
 from scipy.spatial.kdtree import KDTree
 from heapq import heappush, heappop
 from collections import namedtuple
-from .utils import INF, elapsed_time, get_pairs, randomize
+from .utils import INF, elapsed_time, get_pairs, randomize, bisect, traverse
 from .rrt_connect import direct_path
 from .smoothing import smooth_path
 
@@ -81,10 +81,9 @@ def random_selector(path):
     return randomize(path)
 
 def bisect_selector(path):
-    # TODO: bisect selector
-    raise NotImplementedError()
+    return bisect(path)
 
-selector = random_selector
+selector = bisect_selector # TODO: traverse
 
 ##################################################
 
