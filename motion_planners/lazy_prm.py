@@ -1,7 +1,7 @@
 from scipy.spatial.kdtree import KDTree
 from heapq import heappush, heappop
 from collections import namedtuple
-from .utils import INF, elapsed_time, get_pairs
+from .utils import INF, elapsed_time, get_pairs, randomize
 from .rrt_connect import direct_path
 from .smoothing import smooth_path
 
@@ -71,27 +71,45 @@ def get_distance_fn(weights, p_norm=2):
 
 ##################################################
 
-def check_path(path, colliding_vertices, colliding_edges, samples, extend_fn, collision_fn):
-    # TODO: bisect order
-    vertices = list(path)
-    random.shuffle(vertices)
-    for v in vertices:
-        if v not in colliding_vertices:
-            colliding_vertices[v] = collision_fn(samples[v])
-        if colliding_vertices[v]:
-            return False
+def forward_selector(path):
+    return list(path)
 
-    edges = get_pairs(path)
-    random.shuffle(edges)
-    for v1, v2 in edges:
-        if (v1, v2) not in colliding_edges:
-            segment = list(extend_fn(samples[v1], samples[v2]))
-            random.shuffle(segment)
-            colliding_edges[v1, v2] = any(map(collision_fn, segment))
-            colliding_edges[v2, v1] = colliding_edges[v1, v2]
-        if colliding_edges[v1, v2]:
+def backward_selector(path):
+    return list(path)
+
+def random_selector(path):
+    return randomize(path)
+
+def bisect_selector(path):
+    # TODO: bisect selector
+    raise NotImplementedError()
+
+selector = random_selector
+
+##################################################
+
+def check_vertex(v, samples, colliding_vertices, collision_fn):
+    if v not in colliding_vertices:
+        colliding_vertices[v] = collision_fn(samples[v])
+    return not colliding_vertices[v]
+
+def check_edge(v1, v2, samples, colliding_edges, collision_fn, extend_fn):
+    if (v1, v2) not in colliding_edges:
+        segment = selector(extend_fn(samples[v1], samples[v2]))
+        colliding_edges[v1, v2] = any(map(collision_fn, segment))
+        colliding_edges[v2, v1] = colliding_edges[v1, v2]
+    return not colliding_edges[v1, v2]
+
+def check_path(path, colliding_vertices, colliding_edges, samples, extend_fn, collision_fn):
+    for v in random_selector(path):
+        if not check_vertex(v, samples, colliding_vertices, collision_fn):
+            return False
+    for v1, v2 in selector(get_pairs(path)):
+        if not check_edge(v1, v2, samples, colliding_edges, collision_fn, extend_fn):
             return False
     return True
+
+##################################################
 
 def compute_graph(samples, weights=None, p_norm=2, max_degree=10, max_distance=INF, approximate_eps=0.):
     vertices = list(range(len(samples)))
@@ -116,7 +134,8 @@ def compute_graph(samples, weights=None, p_norm=2, max_degree=10, max_distance=I
 ##################################################
 
 def lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn, num_samples=100,
-             weights=None, p_norm=2, max_cost=INF, max_time=INF, **kwargs): #, max_paths=INF):
+             weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, **kwargs): #, max_paths=INF):
+    # TODO: compute parameters using start, goal, and sample statistics
     # TODO: multi-query motion planning
     start_time = time.time()
     # TODO: can embed pose and/or points on the robot for other distances
@@ -145,6 +164,12 @@ def lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn, num_sampl
         for v2 in neighbors_from_index[v1]:
             if not colliding_vertices.get(v2, False) and not colliding_edges.get((v1, v2), False):
                 yield v2
+
+    if not lazy:
+        for vertex in vertices:
+            check_vertex(vertex, samples, colliding_vertices, collision_fn)
+        for vertex1, vertex2 in edges:
+            check_edge(vertex1, vertex2, samples, colliding_edges, collision_fn, extend_fn)
 
     visited = dijkstra(end_index, neighbors_fn, cost_fn)
     heuristic_fn = lambda v: visited[v].g if v in visited else INF

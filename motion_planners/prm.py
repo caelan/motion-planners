@@ -236,7 +236,7 @@ class DegreePRM(PRM):
             return new_vertices
         for v1 in new_vertices:
             degree = 0
-            for _, v2 in sorted(filter(lambda pair: pair[1] != v1 and pair[0] <= self.connect_distance,
+            for _, v2 in sorted(filter(lambda pair: (pair[1] != v1) and (pair[0] <= self.connect_distance),
                                        map(lambda v: (self.distance(v1.q, v.q), v), self.vertices.values())),
                                 key=operator.itemgetter(0)): # TODO - slow, use nearest neighbors
                 if self.target_degree <= degree:
@@ -254,6 +254,7 @@ class DegreePRM(PRM):
 
 def prm(start, goal, distance, sample, extend, collision,
         target_degree=4, connect_distance=INF, num_samples=100): #, max_time=INF):
+    # TODO: compute_graph
     start_time = time.time()
     start = tuple(start)
     goal = tuple(goal)

@@ -1,5 +1,6 @@
 from random import shuffle
 from itertools import islice
+from collections import deque
 import time
 import contextlib
 import pstats
@@ -71,9 +72,36 @@ def randomize(sequence):
     return sequence
 
 
-def traverse(sequence, random=False):
-    # TODO: bisect
-    return randomize(sequence)
+def is_even(num):
+    return num % 2 == 0
+
+
+def is_odd(num):
+    return num % 2 == 1
+
+
+def bisect(sequence):
+    indices = set()
+    queue = deque([(0, len(sequence)-1)])
+    while queue:
+        lower, higher = queue.popleft()
+        if lower > higher:
+            continue
+        index = int((lower + higher) / 2.)
+        assert index not in indices
+        #if is_even(higher - lower):
+        yield sequence[index]
+        queue.extend([
+            (lower, index-1),
+            (index+1, higher),
+        ])
+
+
+def traverse(sequence, random=True):
+    # TODO: integrate with selectors
+    if random:
+        return randomize(sequence)
+    return bisect(sequence)
 
 
 def take(iterable, n=INF):

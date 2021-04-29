@@ -4,7 +4,7 @@ from collections import Mapping
 class StarRoadmap(Mapping, object):
 
     def __init__(self, center, planner):
-        self.center = center
+        self.center = center # TODO: plan instead from the closest point on the roadmap
         self.planner = planner
         self.roadmap = {}
 
