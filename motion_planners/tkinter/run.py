@@ -2,15 +2,29 @@ from __future__ import print_function
 
 import numpy as np
 import math
+import argparse
+import time
 
 from .viewer import sample_box, is_collision_free, \
     create_box, draw_environment, point_collides, sample_line, add_points, \
     add_roadmap, get_box_center, add_path, get_distance_fn
-from ..utils import user_input, profiler, INF, compute_path_cost, get_distance
-from ..rrt_connect import rrt_connect
+from ..utils import user_input, profiler, INF, compute_path_cost, get_distance, elapsed_time
+from ..prm import prm
+from ..lazy_prm import lazy_prm
+from ..rrt_connect import rrt_connect, birrt
+from ..rrt import rrt
+from ..rrt_star import rrt_star
 from ..meta import random_restarts
 from ..diverse import score_portfolio, exhaustively_select_portfolio
 
+ALGORITHMS = [
+    prm,
+    lazy_prm,
+    rrt,
+    rrt_connect,
+    birrt,
+    rrt_star,
+]
 
 ##################################################
 
@@ -77,7 +91,7 @@ def get_extend_fn(obstacles=[]):
 
 ##################################################
 
-def main(smooth=True, num_restarts=1, max_time=0.1):
+def main(smooth=True, max_time=0.1):
     """
     Creates and solves the 2D motion planning problem.
     """
@@ -86,6 +100,18 @@ def main(smooth=True, num_restarts=1, max_time=0.1):
     # TODO: visualize just the tool frame of an end effector
 
     np.set_printoptions(precision=3)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-a', '--algorithm', default=None,
+                        help='The algorithm seed to use.')
+    parser.add_argument('-d', '--draw', action='store_true',
+                        help='When enabled, draws the roadmap')
+    parser.add_argument('-r', '--restarts', default=0, type=int,
+                        help='The number of restarts.')
+    parser.add_argument('-s', '--smooth', action='store_false',
+                        help='When enabled, disables smoothing.')
+    parser.add_argument('-t', '--time', default=1., type=float,
+                        help='The maximum runtime.')
+    args = parser.parse_args()
 
     obstacles = [
         create_box(center=(.35, .75), extents=(.25, .25)),
@@ -116,29 +142,49 @@ def main(smooth=True, num_restarts=1, max_time=0.1):
     # samples = list(islice(region_gen('env'), 100))
     with profiler(field='cumtime'): # cumtime | tottime
         # TODO: cost bound & best cost
-        for _ in range(num_restarts):
+        for _ in range(args.restarts+1):
+            start_time = time.time()
             sample_fn, samples = get_sample_fn(regions['env'])
             extend_fn, roadmap = get_extend_fn(obstacles=obstacles)  # obstacles | []
-            #path = rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
-            #                   iterations=100, tree_frequency=1, max_time=1) #, **kwargs)
-            #path = birrt(start, goal, distance=distance_fn, sample=sample_fn,
-            #             extend=extend_fn, collision=collision_fn, smooth=100) #, smooth=1000, **kwargs)
-            paths = random_restarts(rrt_connect, start, goal, distance_fn=distance_fn, sample_fn=sample_fn,
-                                    extend_fn=extend_fn, collision_fn=collision_fn, restarts=INF,
-                                    max_time=2, max_solutions=INF, smooth=100) #, smooth=1000, **kwargs)
 
-            #path = paths[0] if paths else None
-            #if path is None:
-            #    continue
-            #paths = [path]
+            if args.algorithm == 'prm':
+                path = prm(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
+                           num_samples=200)
+            elif args.algorithm == 'lazy_prm':
+                path = lazy_prm(start, goal, sample_fn, extend_fn, collision_fn,
+                                num_samples=200, max_time=args.time)[0]
+            elif args.algorithm == 'rrt':
+                path = rrt(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
+                           iterations=INF, max_time=args.time)
+            elif args.algorithm == 'rrt_connect':
+                path = rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
+                                   max_time=args.time)
+            elif args.algorithm == 'birrt':
+                path = birrt(start, goal, distance=distance_fn, sample=sample_fn,
+                             extend=extend_fn, collision=collision_fn,
+                             max_time=args.time, smooth=100)
+            elif args.algorithm == 'rrt_star':
+                path = rrt_star(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
+                                radius=1, max_iterations=INF, max_time=args.time)
+            else:
+                raise NotImplementedError(args.algorithm)
+            paths = [] if path is None else [path]
 
-            #paths = exhaustively_select_portfolio(paths, k=2)
-            #print(score_portfolio(paths))
+            #paths = random_restarts(rrt_connect, start, goal, distance_fn=distance_fn, sample_fn=sample_fn,
+            #                         extend_fn=extend_fn, collision_fn=collision_fn, restarts=INF,
+            #                         max_time=args.time, max_solutions=INF, smooth=100) #, smooth=1000, **kwargs)
 
+            # paths = exhaustively_select_portfolio(paths, k=2)
+            # print(score_portfolio(paths))
+
+            print('Solutions ({}): {} | Time: {:.3f}'.format(len(paths), [(len(path), round(compute_path_cost(
+                path, distance_fn), 3)) for path in paths], elapsed_time(start_time)))
             for path in paths:
-                print('Distance: {:.3f}'.format(compute_path_cost(path, distance_fn)))
                 add_path(viewer, path, color='green')
 
+            # path = paths[0] if paths else None
+            if path is None:
+                continue
             # extend_fn, _ = get_extend_fn(obstacles=obstacles)  # obstacles | []
             # smoothed = smooth_path(path, extend_fn, collision_fn, iterations=INF, max_tine=max_time)
             # print('Smoothed distance: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
@@ -146,9 +192,10 @@ def main(smooth=True, num_restarts=1, max_time=0.1):
 
     #########################
 
-    roadmap = samples = []
-    add_roadmap(viewer, roadmap, color='black')
-    add_points(viewer, samples, color='blue')
+    if args.draw:
+        #roadmap = samples = []
+        add_roadmap(viewer, roadmap, color='black')
+        add_points(viewer, samples, color='blue')
 
     #if path is None:
     #    user_input('Finish?')

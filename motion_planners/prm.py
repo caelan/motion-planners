@@ -1,8 +1,9 @@
 from collections import namedtuple, Mapping
 from heapq import heappop, heappush
 import operator
+import time
 
-from .utils import INF, get_pairs, merge_dicts, flatten
+from .utils import INF, get_pairs, merge_dicts, flatten, RED, apply_alpha
 
 
 # TODO - Visibility-PRM, PRM*
@@ -17,7 +18,8 @@ class Vertex(object):
     def clear(self):
         self._handle = None
 
-    def draw(self, env, color=(1, 0, 0, .5)):
+    def draw(self, env, color=apply_alpha(RED, alpha=0.5)):
+        # https://github.mit.edu/caelan/lis-openrave
         from manipulation.primitives.display import draw_node
         self._handle = draw_node(env, self.q, color=color)
 
@@ -60,9 +62,10 @@ class Edge(object):
         #self._handle = None
         self._handles = []
 
-    def draw(self, env, color=(1, 0, 0, .5)):
+    def draw(self, env, color=apply_alpha(RED, alpha=0.5)):
         if self._path is None:
             return
+        # https://github.mit.edu/caelan/lis-openrave
         from manipulation.primitives.display import draw_edge
         #self._handle = draw_edge(env, self.v1.q, self.v2.q, color=color)
         for q1, q2 in get_pairs(self.configs()):
@@ -198,6 +201,7 @@ class PRM(Roadmap):
                     heappush(queue, (cost + heuristic(nv), nv))
         return None
 
+##################################################
 
 class DistancePRM(PRM):
 
@@ -245,3 +249,19 @@ class DegreePRM(PRM):
                 else:
                     degree += 1
         return new_vertices
+
+##################################################
+
+def prm(start, goal, distance, sample, extend, collision,
+        target_degree=4, connect_distance=INF, num_samples=100): #, max_time=INF):
+    start_time = time.time()
+    start = tuple(start)
+    goal = tuple(goal)
+    samples = [start, goal] + [tuple(sample()) for _ in range(num_samples)]
+    if target_degree is None:
+        roadmap = DistancePRM(distance, extend, collision, samples=samples,
+                              connect_distance=connect_distance)
+    else:
+        roadmap = DegreePRM(distance, extend, collision, samples=samples,
+                            target_degree=target_degree, connect_distance=connect_distance)
+    return roadmap(start, goal)

@@ -1,6 +1,7 @@
 from random import random
+import time
 
-from .utils import irange, argmin, RRT_ITERATIONS
+from .utils import irange, argmin, RRT_ITERATIONS, apply_alpha, RED, INF, elapsed_time
 
 
 class TreeNode(object):
@@ -26,7 +27,8 @@ class TreeNode(object):
         self.node_handle = None
         self.edge_handle = None
 
-    def draw(self, env, color=(1, 0, 0, .5)):
+    def draw(self, env, color=apply_alpha(RED, alpha=0.5)):
+        # https://github.mit.edu/caelan/lis-openrave
         from manipulation.primitives.display import draw_node, draw_edge
         self.node_handle = draw_node(env, self.config, color=color)
         if self.parent is not None:
@@ -45,7 +47,8 @@ def configs(nodes):
 
 
 def rrt(start, goal_sample, distance, sample, extend, collision, goal_test=lambda q: False,
-        iterations=RRT_ITERATIONS, goal_probability=.2):
+        iterations=RRT_ITERATIONS, goal_probability=.2, max_time=INF):
+    start_time = time.time()
     if collision(start):
         return None
     if not callable(goal_sample):
@@ -53,6 +56,8 @@ def rrt(start, goal_sample, distance, sample, extend, collision, goal_test=lambd
         goal_sample = lambda: g
     nodes = [TreeNode(start)]
     for i in irange(iterations):
+        if elapsed_time(start_time) >= max_time:
+            break
         goal = random() < goal_probability or i == 0
         s = goal_sample() if goal else sample()
 

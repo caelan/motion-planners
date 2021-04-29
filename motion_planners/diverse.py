@@ -5,6 +5,8 @@ import numpy as np
 
 from motion_planners.utils import INF, compute_path_cost, get_distance
 
+# TODO: shared roadmap for multi-query
+
 def compute_median_distance(path1, path2):
     differences = [get_distance(q1, q2) for q1, q2 in product(path1, path2)]
     return np.median(differences)

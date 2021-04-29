@@ -20,6 +20,15 @@ except NameError:
    user_input = input
 
 
+RED = (1, 0, 0)
+GREEN = (0, 1, 0)
+BLUE = (0, 0, 1)
+
+
+def apply_alpha(color, alpha=1.):
+   return tuple(color[:3]) + (alpha,)
+
+
 def irange(start, stop=None, step=1):  # np.arange
     if stop is None:
         stop = start
@@ -41,7 +50,7 @@ def argmin(function, sequence):
 
 
 def get_pairs(lst):
-    return zip(lst[:-1], lst[1:])
+    return list(zip(lst[:-1], lst[1:]))
 
 
 def merge_dicts(*args):

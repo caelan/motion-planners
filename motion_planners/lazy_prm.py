@@ -1,7 +1,7 @@
 from scipy.spatial.kdtree import KDTree
 from heapq import heappush, heappop
 from collections import namedtuple
-from .utils import INF, elapsed_time
+from .utils import INF, elapsed_time, get_pairs
 from .rrt_connect import direct_path
 from .smoothing import smooth_path
 
@@ -60,6 +60,17 @@ def wastar_search(start_v, end_v, neighbors_fn, cost_fn=unit_cost_fn,
                     heappush(queue, (priority_fn(next_g, next_h), next_g, next_v))
     return None
 
+##################################################
+
+def get_embed_fn(weights):
+    return lambda q: weights * q
+
+def get_distance_fn(weights, p_norm=2):
+    embed_fn = get_embed_fn(weights)
+    return lambda q1, q2: np.linalg.norm(embed_fn(q2) - embed_fn(q1), ord=p_norm)
+
+##################################################
+
 def check_path(path, colliding_vertices, colliding_edges, samples, extend_fn, collision_fn):
     # TODO: bisect order
     vertices = list(path)
@@ -70,7 +81,7 @@ def check_path(path, colliding_vertices, colliding_edges, samples, extend_fn, co
         if colliding_vertices[v]:
             return False
 
-    edges = list(zip(path, path[1:]))
+    edges = get_pairs(path)
     random.shuffle(edges)
     for v1, v2 in edges:
         if (v1, v2) not in colliding_edges:
@@ -82,17 +93,36 @@ def check_path(path, colliding_vertices, colliding_edges, samples, extend_fn, co
             return False
     return True
 
-def lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn, num_samples=100, max_degree=10,
-             weights=None, p_norm=2, max_distance=INF, approximate_eps=0.0,
-             max_cost=INF, max_time=INF, max_paths=INF):
+def compute_graph(samples, weights=None, p_norm=2, max_degree=10, max_distance=INF, approximate_eps=0.):
+    vertices = list(range(len(samples)))
+    edges = set()
+    if not vertices:
+        return vertices, edges
+    if weights is None:
+        weights = np.ones(len(samples[0]))
+    embed_fn = get_embed_fn(weights)
+    embedded = list(map(embed_fn, samples))
+    kd_tree = KDTree(embedded)
+    for v1 in vertices:
+        # TODO: could dynamically compute distances
+        distances, neighbors = kd_tree.query(embedded[v1], k=max_degree + 1, eps=approximate_eps,
+                                             p=p_norm, distance_upper_bound=max_distance)
+        for d, v2 in zip(distances, neighbors):
+            if (d < max_distance) and (v1 != v2):
+                edges.update([(v1, v2), (v2, v1)])
+    # print(time.time() - start_time, len(edges), float(len(edges))/len(samples))
+    return vertices, edges
+
+##################################################
+
+def lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn, num_samples=100,
+             weights=None, p_norm=2, max_cost=INF, max_time=INF, **kwargs): #, max_paths=INF):
     # TODO: multi-query motion planning
     start_time = time.time()
     # TODO: can embed pose and/or points on the robot for other distances
     if weights is None:
         weights = np.ones(len(start_conf))
-    embed_fn = lambda q: weights * q
-    distance_fn = lambda q1, q2: np.linalg.norm(embed_fn(q2) - embed_fn(q1), ord=p_norm)
-    cost_fn = lambda v1, v2: distance_fn(samples[v1], samples[v2])
+    distance_fn = get_distance_fn(weights, p_norm=p_norm)
     # TODO: can compute cost between waypoints from extend_fn
 
     samples = []
@@ -103,49 +133,43 @@ def lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn, num_sampl
     start_index, end_index = 0, 1
     samples[start_index] = start_conf
     samples[end_index] = end_conf
+    cost_fn = lambda v1, v2: distance_fn(samples[v1], samples[v2])
 
-    embedded = list(map(embed_fn, samples))
-    kd_tree = KDTree(embedded)
-    vertices = list(range(len(samples)))
-    edges = set()
-    for v1 in vertices:
-        # TODO: could dynamically compute distances
-        distances, neighbors = kd_tree.query(embedded[v1], k=max_degree+1, eps=approximate_eps,
-                                             p=p_norm, distance_upper_bound=max_distance)
-        for d, v2 in zip(distances, neighbors):
-            if (d < max_distance) and (v1 != v2):
-                edges.update([(v1, v2), (v2, v1)])
+    vertices, edges = compute_graph(samples, p_norm=p_norm, **kwargs)
     neighbors_from_index = {v: set() for v in vertices}
     for v1, v2 in edges:
         neighbors_from_index[v1].add(v2)
-    #print(time.time() - start_time, len(edges), float(len(edges))/len(samples))
 
     colliding_vertices, colliding_edges = {}, {}
     def neighbors_fn(v1):
         for v2 in neighbors_from_index[v1]:
-            if not (colliding_vertices.get(v2, False) or
-                        colliding_edges.get((v1, v2), False)):
+            if not colliding_vertices.get(v2, False) and not colliding_edges.get((v1, v2), False):
                 yield v2
 
     visited = dijkstra(end_index, neighbors_fn, cost_fn)
     heuristic_fn = lambda v: visited[v].g if v in visited else INF
-    while elapsed_time(start_time) < max_time:
+    path = None
+    while (elapsed_time(start_time) < max_time) and (path is None): # TODO: max_attempts
         # TODO: extra cost to prioritize reusing checked edges
-        path = wastar_search(start_index, end_index, neighbors_fn=neighbors_fn,
-                             cost_fn=cost_fn, heuristic_fn=heuristic_fn,
-                             max_cost=max_cost, max_time=max_time-elapsed_time(start_time))
-        if path is None:
-            return None, edges, colliding_vertices, colliding_edges
-        cost = sum(cost_fn(v1, v2) for v1, v2 in zip(path, path[1:]))
-        print('Length: {} | Cost: {:.3f} | Vertices: {} | Edges: {} | Time: {:.3f}'.format(
-            len(path), cost, len(colliding_vertices), len(colliding_edges), elapsed_time(start_time)))
-        if check_path(path, colliding_vertices, colliding_edges, samples, extend_fn, collision_fn):
+        lazy_path = wastar_search(start_index, end_index, neighbors_fn=neighbors_fn,
+                                  cost_fn=cost_fn, heuristic_fn=heuristic_fn,
+                                  max_cost=max_cost, max_time=max_time-elapsed_time(start_time))
+        if lazy_path is None:
             break
+        cost = sum(cost_fn(v1, v2) for v1, v2 in get_pairs(lazy_path))
+        print('Length: {} | Cost: {:.3f} | Vertices: {} | Edges: {} | Time: {:.3f}'.format(
+            len(lazy_path), cost, len(colliding_vertices), len(colliding_edges), elapsed_time(start_time)))
+        if check_path(lazy_path, colliding_vertices, colliding_edges, samples, extend_fn, collision_fn):
+            path = lazy_path
 
+    if path is None:
+        return path, edges, colliding_vertices, colliding_edges
     solution = [start_conf]
-    for q1, q2 in zip(path, path[1:]):
+    for q1, q2 in get_pairs(path):
         solution.extend(extend_fn(samples[q1], samples[q2]))
     return solution, samples, edges, colliding_vertices, colliding_edges
+
+##################################################
 
 def replan_loop(start_conf, end_conf, sample_fn, extend_fn, collision_fn, params_list, smooth=0, **kwargs):
     if collision_fn(start_conf) or collision_fn(end_conf):

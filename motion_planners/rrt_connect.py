@@ -33,7 +33,7 @@ def rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
         return None
     nodes1, nodes2 = [TreeNode(q1)], [TreeNode(q2)]
     for iteration in irange(iterations):
-        if max_time <= elapsed_time(start_time):
+        if elapsed_time(start_time) >= max_time:
             break
         swap = len(nodes1) > len(nodes2)
         tree1, tree2 = nodes1, nodes2
@@ -66,7 +66,7 @@ def birrt(q1, q2, distance, sample, extend, collision,
         return path
     for attempt in irange(restarts + 1):
         # TODO: use the restart wrapper
-        if max_time <= elapsed_time(start_time):
+        if elapsed_time(start_time) >= max_time:
             break
         path = rrt_connect(q1, q2, distance, sample, extend, collision,
                            max_time=max_time - elapsed_time(start_time), **kwargs)

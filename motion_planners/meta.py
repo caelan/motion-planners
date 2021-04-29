@@ -23,6 +23,7 @@ def direct_path(q1, q2, extend_fn, collision_fn):
 def random_restarts(solve_fn, q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
                     restarts=RRT_RESTARTS, smooth=RRT_SMOOTHING,
                     success_cost=0., max_time=INF, max_solutions=1, **kwargs):
+    # TODO: pure smoothing version of this
     start_time = time.time()
     solutions = []
     if any(collision_fn(q) for q in [q1, q2]):

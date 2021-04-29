@@ -3,8 +3,10 @@ from __future__ import print_function
 from random import random
 from time import time
 
-from .utils import INF, argmin, elapsed_time
+from .utils import INF, argmin, elapsed_time, BLUE, RED, apply_alpha
 
+EPSILON = 1e-6
+PRINT_FREQUENCY = 100
 
 class OptimalNode(object):
 
@@ -58,8 +60,9 @@ class OptimalNode(object):
         self.edge_handle = None
 
     def draw(self, env):
+        # https://github.mit.edu/caelan/lis-openrave
         from manipulation.primitives.display import draw_node, draw_edge
-        color = (0, 0, 1, .5) if self.solution else (1, 0, 0, .5)
+        color = apply_alpha(BLUE if self.solution else RED, alpha=0.5)
         self.node_handle = draw_node(env, self.config, color=color)
         if self.parent is not None:
             self.edge_handle = draw_edge(
@@ -79,52 +82,56 @@ def safe_path(sequence, collision):
     return path
 
 
-def rrt_star(start, goal, distance, sample, extend, collision, radius, max_time=INF, max_iterations=INF, goal_probability=.2, informed=True):
+def rrt_star(start, goal, distance, sample, extend, collision, radius,
+             max_time=INF, max_iterations=INF, goal_probability=.2, informed=True):
     if collision(start) or collision(goal):
         return None
     nodes = [OptimalNode(start)]
     goal_n = None
-    t0 = time()
-    it = 0
-    while (t0 - time()) < max_time and it < max_iterations:
-        do_goal = goal_n is None and (it == 0 or random() < goal_probability)
+    start_time = time()
+    iteration = 0
+    while (elapsed_time(start_time) < max_time) and (iteration < max_iterations):
+        do_goal = goal_n is None and (iteration == 0 or random() < goal_probability)
         s = goal if do_goal else sample()
         # Informed RRT*
-        if informed and goal_n is not None and distance(start, s) + distance(s, goal) >= goal_n.cost:
+        if informed and (goal_n is not None) and (distance(start, s) + distance(s, goal) >= goal_n.cost):
             continue
-        if it % 100 == 0:
+        if iteration % PRINT_FREQUENCY == 0:
             success = goal_n is not None
             cost = goal_n.cost if success else INF
-            print(it, elapsed_time(t0), success, do_goal, cost)
-        it += 1
+            print('Iteration: {} | Time: {:.3f} | Success: {} | {} | Cost: {:.3f}'.format(
+                iteration, elapsed_time(start_time), success, do_goal, cost))
+        iteration += 1
 
         nearest = argmin(lambda n: distance(n.config, s), nodes)
         path = safe_path(extend(nearest.config, s), collision)
         if len(path) == 0:
             continue
         new = OptimalNode(path[-1], parent=nearest, d=distance(
-            nearest.config, path[-1]), path=path[:-1], iteration=it)
+            nearest.config, path[-1]), path=path[:-1], iteration=iteration)
         # if safe and do_goal:
-        if do_goal and distance(new.config, goal) < 1e-6:
+        if do_goal and (distance(new.config, goal) < EPSILON):
             goal_n = new
             goal_n.set_solution(True)
         # TODO - k-nearest neighbor version
-        neighbors = filter(lambda n: distance(
-            n.config, new.config) < radius, nodes)
+        neighbors = filter(lambda n: distance(n.config, new.config) < radius, nodes)
         nodes.append(new)
 
         for n in neighbors:
             d = distance(n.config, new.config)
             if n.cost + d < new.cost:
                 path = safe_path(extend(n.config, new.config), collision)
-                if len(path) != 0 and distance(new.config, path[-1]) < 1e-6:
-                    new.rewire(n, d, path[:-1], iteration=it)
+                if (len(path) != 0) and (distance(new.config, path[-1]) < EPSILON):
+                    new.rewire(n, d, path[:-1], iteration=iteration)
         for n in neighbors:  # TODO - avoid repeating work
             d = distance(new.config, n.config)
             if new.cost + d < n.cost:
                 path = safe_path(extend(new.config, n.config), collision)
-                if len(path) != 0 and distance(n.config, path[-1]) < 1e-6:
-                    n.rewire(new, d, path[:-1], iteration=it)
+                if (len(path) != 0) and (distance(n.config, path[-1]) < EPSILON):
+                    n.rewire(new, d, path[:-1], iteration=iteration)
     if goal_n is None:
         return None
     return goal_n.retrace()
+
+def informed_rrt_star(start, goal, distance, sample, extend, collision, radius, **kwargs):
+    return rrt_star(start, goal, distance, sample, extend, collision, radius, informed=True, **kwargs)
