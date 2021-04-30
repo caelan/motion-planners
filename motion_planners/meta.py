@@ -4,30 +4,49 @@ from .smoothing import smooth_path
 from .utils import RRT_RESTARTS, RRT_SMOOTHING, INF, irange, elapsed_time, compute_path_cost, default_selector
 
 
-def direct_path(q1, q2, extend_fn, collision_fn):
+def direct_path(start, goal, extend_fn, collision_fn):
+    """
+    :param start: Start configuration - conf
+    :param goal: End configuration - conf
+    :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
+    :param collision_fn: Collision function - collision_fn(q)->bool
+    :return: Path [q', ..., q"] or None if unable to find a solution
+    """
     # TODO: version which checks whether the segment is valid
-    if collision_fn(q1) or collision_fn(q2):
+    if collision_fn(start) or collision_fn(goal):
         return None
-    path = [q1] + list(extend_fn(q1, q2))
+    path = list(extend_fn(start, goal))
+    path = [start] + path
     if any(collision_fn(q) for q in default_selector(path)):
         return None
     return path
-    # path = [q1]
-    # for q in extend_fn(q1, q2):
+    # path = [start]
+    # for q in extend_fn(start, goal):
     #     if collision_fn(q):
     #         return None
     #     path.append(q)
     # return path
 
 
-def random_restarts(solve_fn, q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
+def random_restarts(solve_fn, start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                     restarts=RRT_RESTARTS, smooth=RRT_SMOOTHING,
                     success_cost=0., max_time=INF, max_solutions=1, **kwargs):
+    """
+    :param start: Start configuration - conf
+    :param goal: End configuration - conf
+    :param distance_fn: Distance function - distance_fn(q1, q2)->float
+    :param sample_fn: Distance function - sample_fn()->conf
+    :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
+    :param collision_fn: Collision function - collision_fn(q)->bool
+    :param max_time: Maximum runtime - float
+    :param kwargs: Keyword arguments
+    :return: Paths [[q', ..., q"], [[q'', ..., q""]]
+    """
     start_time = time.time()
     solutions = []
-    if any(collision_fn(q) for q in [q1, q2]):
+    if any(collision_fn(q) for q in [start, goal]):
         return solutions
-    path = direct_path(q1, q2, extend_fn, collision_fn)
+    path = direct_path(start, goal, extend_fn, collision_fn)
     if path is not None:
         solutions.append(path)
 
@@ -35,7 +54,7 @@ def random_restarts(solve_fn, q1, q2, distance_fn, sample_fn, extend_fn, collisi
         if (len(solutions) >= max_solutions) or (elapsed_time(start_time) >= max_time):
             break
         attempt_time = (max_time - elapsed_time(start_time))
-        path = solve_fn(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
+        path = solve_fn(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                         max_time=attempt_time, **kwargs)
         if path is None:
             continue

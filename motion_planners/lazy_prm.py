@@ -10,6 +10,7 @@ from .smoothing import smooth_path
 import time
 import numpy as np
 
+Metric = namedtuple('Metric', ['p_norm', 'weights'])
 Node = namedtuple('Node', ['g', 'parent'])
 unit_cost_fn = lambda v1, v2: 1.
 zero_heuristic_fn = lambda v: 0
@@ -119,25 +120,35 @@ def compute_graph(samples, weights=None, p_norm=2, max_degree=10, max_distance=I
 
 ##################################################
 
-def lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn, num_samples=100,
-             weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, **kwargs): #, max_paths=INF):
+def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, num_samples=100,
+             weights=None, p_norm=2, lazy=False, max_cost=INF, max_time=INF, **kwargs): #, max_paths=INF):
+    """
+    :param start: Start configuration - conf
+    :param goal: End configuration - conf
+    :param sample_fn: Distance function - sample_fn()->conf
+    :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
+    :param collision_fn: Collision function - collision_fn(q)->bool
+    :param max_time: Maximum runtime - float
+    :param kwargs: Keyword arguments
+    :return: Path [q', ..., q"] or None if unable to find a solution
+    """
     # TODO: compute parameters using start, goal, and sample_fn statistics
     # TODO: multi-query motion planning
     start_time = time.time()
     # TODO: can embed pose and/or points on the robot for other distances
     if weights is None:
-        weights = np.ones(len(start_conf))
+        weights = np.ones(len(start))
     distance_fn = get_distance_fn(weights, p_norm=p_norm)
     # TODO: can compute cost between waypoints from extend_fn
 
     samples = []
     while len(samples) < num_samples:
         conf = sample_fn()
-        if (distance_fn(start_conf, conf) + distance_fn(conf, end_conf)) < max_cost:
+        if (distance_fn(start, conf) + distance_fn(conf, goal)) < max_cost:
             samples.append(conf)
     start_index, end_index = 0, 1
-    samples[start_index] = start_conf
-    samples[end_index] = end_conf
+    samples[start_index] = start
+    samples[end_index] = goal
     cost_fn = lambda v1, v2: distance_fn(samples[v1], samples[v2])
 
     vertices, edges = compute_graph(samples, p_norm=p_norm, **kwargs)
@@ -175,7 +186,7 @@ def lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn, num_sampl
 
     if path is None:
         return path, edges, colliding_vertices, colliding_edges
-    solution = [start_conf]
+    solution = [start]
     for q1, q2 in get_pairs(path):
         solution.extend(extend_fn(samples[q1], samples[q2]))
     return solution, samples, edges, colliding_vertices, colliding_edges

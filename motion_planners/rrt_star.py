@@ -85,6 +85,16 @@ def safe_path(sequence, collision):
 
 def rrt_star(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, radius,
              max_time=INF, max_iterations=INF, goal_probability=.2, informed=True):
+    """
+    :param start: Start configuration - conf
+    :param goal: End configuration - conf
+    :param distance_fn: Distance function - distance_fn(q1, q2)->float
+    :param sample_fn: Distance function - sample_fn()->conf
+    :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
+    :param collision_fn: Collision function - collision_fn(q)->bool
+    :param max_time: Maximum runtime - float
+    :return: Path [q', ..., q"] or None if unable to find a solution
+    """
     if collision_fn(start) or collision_fn(goal):
         return None
     nodes = [OptimalNode(start)]

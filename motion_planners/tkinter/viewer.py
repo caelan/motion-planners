@@ -107,8 +107,8 @@ def sample_box(box):
 
 #################################################################
 
-def draw_environment(obstacles, regions):
-    viewer = PRMViewer()
+def draw_environment(obstacles, regions, **kwargs):
+    viewer = PRMViewer(**kwargs)
     for box in obstacles:
         viewer.draw_rectangle(box, color='brown')
     for name, region in regions.items():

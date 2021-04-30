@@ -63,9 +63,8 @@ def get_connected_test(obstacles, max_distance=0.25): # 0.25 | 0.2 | 0.25 | 0.5 
         return are_connected
     return connected_test, roadmap
 
-def get_threshold_fn():
+def get_threshold_fn(d=2):
     # http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.419.5503&rep=rep1&type=pdf
-    d = 2
     vol_free = (1 - 0) * (1 - 0)
     vol_ball = math.pi * (1 ** 2)
     gamma = 2 * ((1 + 1. / d) * (vol_free / vol_ball)) ** (1. / d)
@@ -85,17 +84,18 @@ def get_collision_fn(obstacles):
     return collision_fn, cfree
 
 def get_extend_fn(obstacles=[]):
-    #collision_fn, cfree = get_collision_fn(obstacles)
+    collision_fn, _ = get_collision_fn(obstacles)
     roadmap = []
 
     def extend_fn(q1, q2):
         path = [q1]
         for q in sample_line(segment=(q1, q2)):
-            #if collision_fn(q):
-            #    return
             yield q
-            roadmap.append((path[-1], q))
-            path.append(q)
+            if collision_fn(q):
+                path = None
+            if path is not None:
+                roadmap.append((path[-1], q))
+                path.append(q)
 
     return extend_fn, roadmap
 
@@ -143,7 +143,11 @@ def main():
         goal = get_box_center(regions[goal])
     else:
         goal = np.array([1., 1.])
-    viewer = draw_environment(obstacles, regions)
+
+    title = args.algorithm
+    if args.smooth:
+        title += '+shortcut'
+    viewer = draw_environment(obstacles, regions, title=title)
 
     #########################
 
@@ -196,8 +200,8 @@ def main():
             if args.draw:
                 # roadmap = samples = cfree = []
                 add_roadmap(viewer, roadmap, color='black')
-                # add_points(viewer, samples, color='blue')
-                add_points(viewer, cfree, color='blue', radius=2)
+                add_points(viewer, samples, color='red', radius=2)
+                #add_points(viewer, cfree, color='blue', radius=2)
 
             print('Solutions ({}): {} | Time: {:.3f}'.format(len(paths), [(len(path), round(compute_path_cost(
                 path, distance_fn), 3)) for path in paths], elapsed_time(start_time)))
@@ -206,7 +210,7 @@ def main():
 
             if args.smooth:
                 for path in paths:
-                    extend_fn, _ = get_extend_fn(obstacles=obstacles)  # obstacles | []
+                    extend_fn, roadmap = get_extend_fn(obstacles=obstacles)  # obstacles | []
                     smoothed = smooth_path(path, extend_fn, collision_fn, iterations=INF, max_time=args.time)
                     print('Smoothed distance_fn: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
                     add_path(viewer, smoothed, color='red')

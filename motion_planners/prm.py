@@ -3,7 +3,7 @@ from heapq import heappop, heappush
 import operator
 import time
 
-from .utils import INF, get_pairs, merge_dicts, flatten, RED, apply_alpha
+from .utils import INF, get_pairs, merge_dicts, flatten, RED, apply_alpha, default_selector
 
 
 # TODO - Visibility-PRM, PRM*
@@ -217,7 +217,7 @@ class DistancePRM(PRM):
             for v2 in new_vertices[i + 1:] + old_vertices:
                 if self.distance_fn(v1.q, v2.q) <= self.connect_distance:
                     path = list(self.extend_fn(v1.q, v2.q))[:-1]
-                    if not any(self.collision_fn(q) for q in path):
+                    if not any(self.collision_fn(q) for q in default_selector(path)):
                         self.connect(v1, v2, path)
         return new_vertices
 
@@ -244,7 +244,7 @@ class DegreePRM(PRM):
                     break
                 if v2 not in v1.edges:
                     path = list(self.extend_fn(v1.q, v2.q))[:-1]
-                    if not any(self.collision_fn(q) for q in path):
+                    if not any(self.collision_fn(q) for q in default_selector(path)):
                         self.connect(v1, v2, path)
                         degree += 1
                 else:
@@ -255,6 +255,15 @@ class DegreePRM(PRM):
 
 def prm(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
         target_degree=4, connect_distance=INF, num_samples=100): #, max_time=INF):
+    """
+    :param start: Start configuration - conf
+    :param goal: End configuration - conf
+    :param distance_fn: Distance function - distance_fn(q1, q2)->float
+    :param sample_fn: Distance function - sample_fn()->conf
+    :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
+    :param collision_fn: Collision function - collision_fn(q)->bool
+    :return: Path [q', ..., q"] or None if unable to find a solution
+    """
     # TODO: compute_graph
     start_time = time.time()
     start = tuple(start)

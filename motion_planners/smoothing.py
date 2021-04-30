@@ -6,6 +6,14 @@ import time
 import numpy as np
 
 def smooth_path_old(path, extend_fn, collision_fn, iterations=50, max_time=INF, verbose=False, **kwargs):
+    """
+    :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
+    :param collision_fn: Collision function - collision_fn(q)->bool
+    :param iterations: Maximum number of iterations - int
+    :param max_time: Maximum runtime - float
+    :param kwargs: Keyword arguments
+    :return: Path [q', ..., q"] or None if unable to find a solution
+    """
     assert (iterations < INF) or (max_time < INF)
     start_time = time.time()
     smoothed_path = path
@@ -32,6 +40,14 @@ def refine_waypoints(waypoints, extend_fn):
     return list(flatten(extend_fn(q1, q2) for q1, q2 in get_pairs(waypoints))) # [waypoints[0]] +
 
 def smooth_path(path, extend_fn, collision_fn, distance_fn=None, iterations=50, max_time=INF, verbose=False):
+    """
+    :param distance_fn: Distance function - distance_fn(q1, q2)->float
+    :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
+    :param collision_fn: Collision function - collision_fn(q)->bool
+    :param iterations: Maximum number of iterations - int
+    :param max_time: Maximum runtime - float
+    :return: Path [q', ..., q"] or None if unable to find a solution
+    """
     # TODO: makes an assumption on the distance_fn metric
     # TODO: smooth until convergence
     assert (iterations < INF) or (max_time < INF)

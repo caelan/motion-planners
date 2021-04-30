@@ -19,6 +19,13 @@ def retrace(visited, q):
 
 
 def bfs(start, goal, neighbors_fn, collision_fn, max_iterations=INF, max_time=INF):
+    """
+    :param start: Start configuration - conf
+    :param goal: End configuration - conf
+    :param collision_fn: Collision function - collision_fn(q)->bool
+    :param max_time: Maximum runtime - float
+    :return: Path [q', ..., q"] or None if unable to find a solution
+    """
     start_time = time.time()
     if collision_fn(start) or collision_fn(goal):
         return None
@@ -30,11 +37,11 @@ def bfs(start, goal, neighbors_fn, collision_fn, max_iterations=INF, max_time=IN
         current = queue.popleft()
         if goal is not None and tuple(current) == tuple(goal):
             return retrace(visited, current)
-        for next in neighbors_fn(current):
+        for new in neighbors_fn(current):
             # TODO - make edges for real (and store bad edges)
-            if (tuple(next) not in visited) and not collision_fn(next):
-                visited[tuple(next)] = Node(visited[tuple(current)].g + 1, current)
-                queue.append(next)
+            if (tuple(new) not in visited) and not collision_fn(new):
+                visited[tuple(new)] = Node(visited[tuple(current)].g + 1, current)
+                queue.append(new)
     return None
 
 ##################################################
@@ -51,10 +58,18 @@ wastar3 = weighted(2)
 greedy = weighted(INF)
 lexicographic = lambda g, h: (h, g)
 
-def best_first(start, goal, distance_fn, neighbors_fn, collision,
+def best_first(start, goal, distance_fn, neighbors_fn, collision_fn,
                max_iterations=INF, max_time=INF, priority=lexicographic):  # TODO - put start and goal in neighbors_fn
+    """
+    :param start: Start configuration - conf
+    :param goal: End configuration - conf
+    :param distance_fn: Distance function - distance_fn(q1, q2)->float
+    :param collision_fn: Collision function - collision_fn(q)->bool
+    :param max_time: Maximum runtime - float
+    :return: Path [q', ..., q"] or None if unable to find a solution
+    """
     start_time = time.time()
-    if collision(start) or collision(goal):
+    if collision_fn(start) or collision_fn(goal):
         return None
     queue = [(priority(0, distance_fn(start, goal)), 0, start)]
     visited = {tuple(start): Node(g=0, parent=None)}
@@ -68,11 +83,11 @@ def best_first(start, goal, distance_fn, neighbors_fn, collision,
         iterations += 1
         if tuple(current) == tuple(goal):
             return retrace(visited, current)
-        for next in neighbors_fn(current):
-            next_g = current_g + distance_fn(current, next)
-            if (tuple(next) not in visited or next_g < visited[tuple(next)].g) and not collision(next):
-                visited[tuple(next)] = Node(next_g, current)
+        for new in neighbors_fn(current):
+            new_g = current_g + distance_fn(current, new)
+            if (tuple(new) not in visited or new_g < visited[tuple(new)].g) and not collision_fn(new):
+                visited[tuple(new)] = Node(new_g, current)
                 # ValueError: The truth value of an array with more than one
                 # element is ambiguous.
-                heappush(queue, (priority(next_g, distance_fn(next, goal)), next_g, next))
+                heappush(queue, (priority(new_g, distance_fn(new, goal)), new_g, new))
     return None

@@ -48,6 +48,16 @@ def configs(nodes):
 
 def rrt(start, goal_sample, distance_fn, sample_fn, extend_fn, collision_fn, goal_test=lambda q: False,
         iterations=RRT_ITERATIONS, goal_probability=.2, max_time=INF):
+    """
+    :param start: Start configuration - conf
+    :param distance_fn: Distance function - distance_fn(q1, q2)->float
+    :param sample_fn: Distance function - sample_fn()->conf
+    :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
+    :param collision_fn: Collision function - collision_fn(q)->bool
+    :param iterations: Maximum number of iterations - int
+    :param max_time: Maximum runtime - float
+    :return: Path [q', ..., q"] or None if unable to find a solution
+    """
     start_time = time.time()
     if collision_fn(start):
         return None
