@@ -211,7 +211,8 @@ class DistancePRM(PRM):
             distance, extend, collision, samples=samples)
 
     def grow(self, samples):
-        old_vertices, new_vertices = self.vertices.keys(), self.add(samples)
+        old_vertices = self.vertices.keys()
+        new_vertices = self.add(samples)
         for i, v1 in enumerate(new_vertices):
             for v2 in new_vertices[i + 1:] + old_vertices:
                 if self.distance(v1.q, v2.q) <= self.connect_distance:
@@ -252,17 +253,17 @@ class DegreePRM(PRM):
 
 ##################################################
 
-def prm(start, goal, distance, sample, extend, collision,
+def prm(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
         target_degree=4, connect_distance=INF, num_samples=100): #, max_time=INF):
     # TODO: compute_graph
     start_time = time.time()
     start = tuple(start)
     goal = tuple(goal)
-    samples = [start, goal] + [tuple(sample()) for _ in range(num_samples)]
+    samples = [start, goal] + [tuple(sample_fn()) for _ in range(num_samples)]
     if target_degree is None:
-        roadmap = DistancePRM(distance, extend, collision, samples=samples,
+        roadmap = DistancePRM(distance_fn, extend_fn, collision_fn, samples=samples,
                               connect_distance=connect_distance)
     else:
-        roadmap = DegreePRM(distance, extend, collision, samples=samples,
+        roadmap = DegreePRM(distance_fn, extend_fn, collision_fn, samples=samples,
                             target_degree=target_degree, connect_distance=connect_distance)
     return roadmap(start, goal)

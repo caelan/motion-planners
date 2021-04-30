@@ -20,6 +20,7 @@ def retrace_path(visited, vertex):
 
 def dijkstra(start_v, neighbors_fn, cost_fn=unit_cost_fn):
     # Update the heuristic over time
+    # TODO: overlap with discrete
     start_g = 0
     visited = {start_v: Node(start_g, None)}
     queue = [(start_g, start_v)]
@@ -35,14 +36,15 @@ def dijkstra(start_v, neighbors_fn, cost_fn=unit_cost_fn):
     return visited
 
 def wastar_search(start_v, end_v, neighbors_fn, cost_fn=unit_cost_fn,
-                  heuristic_fn=zero_heuristic_fn, w=1, max_cost=INF, max_time=INF):
+                  heuristic_fn=zero_heuristic_fn, w=1., max_cost=INF, max_time=INF):
     # TODO: lazy wastar to get different paths
     #heuristic_fn = lambda v: cost_fn(v, end_v)
     priority_fn = lambda g, h: g + w*h
     goal_test = lambda v: v == end_v
 
     start_time = time.time()
-    start_g, start_h = 0, heuristic_fn(start_v)
+    start_g = 0
+    start_h = heuristic_fn(start_v)
     visited = {start_v: Node(start_g, None)}
     queue = [(priority_fn(start_g, start_h), start_g, start_v)]
     while queue and (elapsed_time(start_time) < max_time):
