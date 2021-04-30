@@ -28,8 +28,9 @@ Sampling-Based:
 
 Grid Search
 * [Breadth-First Search (BFS)](https://github.com/caelan/motion-planners/blob/691100867352db24535f29d1f4065b6da059ade3/motion_planners/discrete.py#L18)
-* [Dijkstra/Uniform-Cost Search(UCS)](https://github.com/caelan/motion-planners/blob/691100867352db24535f29d1f4065b6da059ade3/motion_planners/discrete.py#L40)
+<!--* [Dijkstra/Uniform-Cost Search(UCS)](https://github.com/caelan/motion-planners/blob/691100867352db24535f29d1f4065b6da059ade3/motion_planners/discrete.py#L40)-->
 * [A*](https://github.com/caelan/motion-planners/blob/691100867352db24535f29d1f4065b6da059ade3/motion_planners/discrete.py#L40)
+* [Lattice](https://github.com/caelan/motion-planners/blob/master/motion_planners/lattice.py)
 
 Other
 * [Straight-Line Path](https://github.com/caelan/motion-planners/blob/master/motion_planners/meta.py#L7)
