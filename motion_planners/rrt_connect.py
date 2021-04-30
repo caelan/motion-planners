@@ -2,7 +2,7 @@ import time
 
 from itertools import takewhile
 
-from .meta import direct_path
+from .meta import direct_path, random_restarts
 from .smoothing import smooth_path, smooth_path_old
 from .rrt import TreeNode, configs
 from .utils import irange, argmin, RRT_ITERATIONS, RRT_RESTARTS, RRT_SMOOTHING, INF, elapsed_time, \
@@ -55,26 +55,9 @@ def rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
 
 #################################################################
 
-def birrt(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
-          restarts=RRT_RESTARTS, smooth=RRT_SMOOTHING, max_time=INF, **kwargs):
-    # TODO: move to the meta class
-    start_time = time.time()
-    if collision_fn(q1) or collision_fn(q2):
+def birrt(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn, **kwargs):
+    solutions = random_restarts(rrt_connect, q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
+                                max_solutions=1, **kwargs)
+    if not solutions:
         return None
-    path = direct_path(q1, q2, extend_fn, collision_fn)
-    if path is not None:
-        return path
-    for attempt in irange(restarts + 1):
-        # TODO: use the restart wrapper
-        if elapsed_time(start_time) >= max_time:
-            break
-        path = rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
-                           max_time=max_time - elapsed_time(start_time), **kwargs)
-        if path is not None:
-            #print('{} attempts'.format(attempt))
-            if smooth is None:
-                return path
-            #return smooth_path_old(path, extend_fn, collision_fn, iterations=smooth)
-            return smooth_path(path, extend_fn, collision_fn, distance_fn=distance_fn, iterations=smooth,
-                               max_time=max_time - elapsed_time(start_time))
-    return None
+    return solutions[0]

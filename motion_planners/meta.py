@@ -47,7 +47,6 @@ def random_restarts(solve_fn, q1, q2, distance_fn, sample_fn, extend_fn, collisi
     solutions = sorted(solutions, key=lambda path: compute_path_cost(path, distance_fn))
     print('Solutions ({}): {} | Time: {:.3f}'.format(len(solutions), [(len(path), round(compute_path_cost(
         path, distance_fn), 3)) for path in solutions], elapsed_time(start_time)))
-
     return solutions
 
 def solve_and_smooth(solve_fn, q1, q2, distance_fn, sample_fn, extend_fn, collision_fn, **kwargs):

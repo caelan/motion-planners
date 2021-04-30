@@ -33,6 +33,7 @@ ALGORITHMS = [
 ##################################################
 
 def get_sample_fn(region, obstacles=[], use_halton=True): #, check_collisions=False):
+    # TODO: Gaussian sampling for narrow passages
     samples = []
     collision_fn, _ = get_collision_fn(obstacles)
     lower, upper = region
@@ -188,34 +189,24 @@ def main():
             # paths = exhaustively_select_portfolio(paths, k=2)
             # print(score_portfolio(paths))
 
+            if args.draw:
+                # roadmap = samples = cfree = []
+                add_roadmap(viewer, roadmap, color='black')
+                # add_points(viewer, samples, color='blue')
+                add_points(viewer, cfree, color='blue', radius=2)
+
             print('Solutions ({}): {} | Time: {:.3f}'.format(len(paths), [(len(path), round(compute_path_cost(
                 path, distance_fn), 3)) for path in paths], elapsed_time(start_time)))
             for path in paths:
                 add_path(viewer, path, color='green')
-            if not args.smooth:
-                continue
 
-            # TODO: Gaussian sampling for narrow passages
-            for path in paths:
-                extend_fn, _ = get_extend_fn(obstacles=obstacles)  # obstacles | []
-                smoothed = smooth_path(path, extend_fn, collision_fn, iterations=INF, max_time=args.time)
-                print('Smoothed distance_fn: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
-                add_path(viewer, smoothed, color='red')
-
-    #########################
-
-    if args.draw:
-        #roadmap = samples = cfree = []
-        add_roadmap(viewer, roadmap, color='black')
-        #add_points(viewer, samples, color='blue')
-        add_points(viewer, cfree, color='green', radius=2,)
-
-    #if path is None:
-    #    user_input('Finish?')
-    #    return
-
-    user_input('Finish?')
-
+            if args.smooth:
+                for path in paths:
+                    extend_fn, _ = get_extend_fn(obstacles=obstacles)  # obstacles | []
+                    smoothed = smooth_path(path, extend_fn, collision_fn, iterations=INF, max_time=args.time)
+                    print('Smoothed distance_fn: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
+                    add_path(viewer, smoothed, color='red')
+            user_input('Finish?')
 
 if __name__ == '__main__':
     main()
