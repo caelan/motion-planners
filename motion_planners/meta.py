@@ -35,7 +35,7 @@ def random_restarts(solve_fn, start, goal, distance_fn, sample_fn, extend_fn, co
     :param start: Start configuration - conf
     :param goal: End configuration - conf
     :param distance_fn: Distance function - distance_fn(q1, q2)->float
-    :param sample_fn: Distance function - sample_fn()->conf
+    :param sample_fn: Sample function - sample_fn()->conf
     :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
     :param collision_fn: Collision function - collision_fn(q)->bool
     :param max_time: Maximum runtime - float

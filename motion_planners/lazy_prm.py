@@ -125,7 +125,7 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, num_samples=100,
     """
     :param start: Start configuration - conf
     :param goal: End configuration - conf
-    :param sample_fn: Distance function - sample_fn()->conf
+    :param sample_fn: Sample function - sample_fn()->conf
     :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
     :param collision_fn: Collision function - collision_fn(q)->bool
     :param max_time: Maximum runtime - float
