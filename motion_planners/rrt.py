@@ -46,10 +46,10 @@ def configs(nodes):
     return list(map(lambda n: n.config, nodes))
 
 
-def rrt(start, goal_sample, distance, sample, extend, collision, goal_test=lambda q: False,
+def rrt(start, goal_sample, distance_fn, sample_fn, extend_fn, collision_fn, goal_test=lambda q: False,
         iterations=RRT_ITERATIONS, goal_probability=.2, max_time=INF):
     start_time = time.time()
-    if collision(start):
+    if collision_fn(start):
         return None
     if not callable(goal_sample):
         g = goal_sample
@@ -59,11 +59,11 @@ def rrt(start, goal_sample, distance, sample, extend, collision, goal_test=lambd
         if elapsed_time(start_time) >= max_time:
             break
         goal = random() < goal_probability or i == 0
-        s = goal_sample() if goal else sample()
+        s = goal_sample() if goal else sample_fn()
 
-        last = argmin(lambda n: distance(n.config, s), nodes)
-        for q in extend(last.config, s):
-            if collision(q):
+        last = argmin(lambda n: distance_fn(n.config, s), nodes)
+        for q in extend_fn(last.config, s):
+            if collision_fn(q):
                 break
             last = TreeNode(q, parent=last)
             nodes.append(last)

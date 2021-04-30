@@ -33,7 +33,7 @@ def compute_portfolio_distance(path1, path2, min_distance=0.):
 
 
 def score_portfolio(portfolio, **kwargs):
-    # TODO: score based on collision voxel overlap at different resolutions
+    # TODO: score based on collision_fn voxel overlap at different resolutions
     score_fn = compute_minimax_distance # compute_median_distance | compute_minimax_distance | compute_portfolio_distance
     score = INF
     for path1, path2 in combinations(portfolio, r=2):
@@ -44,7 +44,7 @@ def score_portfolio(portfolio, **kwargs):
 def exhaustively_select_portfolio(candidates, k=10, **kwargs):
     if len(candidates) <= k:
         return candidates
-    # TODO: minimum length portfolio such that at nothing is within a certain distance
+    # TODO: minimum length portfolio such that at nothing is within a certain distance_fn
     best_portfolios, best_score = [], 0
     for portfolio in combinations(candidates, r=k):
         score = score_portfolio(portfolio, **kwargs)

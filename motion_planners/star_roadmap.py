@@ -1,11 +1,10 @@
 from collections import Mapping
 
-#class StarRoadmap(Mapping, object):
 class StarRoadmap(Mapping, object):
 
-    def __init__(self, center, planner):
+    def __init__(self, center, planner_fn):
         self.center = center # TODO: plan instead from the closest point on the roadmap
-        self.planner = planner
+        self.planner_fn = planner_fn
         self.roadmap = {}
 
     """
@@ -21,7 +20,7 @@ class StarRoadmap(Mapping, object):
 
     def grow(self, goal):
         if goal not in self.roadmap:
-            self.roadmap[goal] = self.planner(self.center, goal)
+            self.roadmap[goal] = self.planner_fn(self.center, goal)
         return self.roadmap[goal]
 
     def __call__(self, start, goal):

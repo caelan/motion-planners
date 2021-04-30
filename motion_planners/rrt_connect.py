@@ -55,26 +55,26 @@ def rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
 
 #################################################################
 
-def birrt(q1, q2, distance, sample, extend, collision,
+def birrt(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
           restarts=RRT_RESTARTS, smooth=RRT_SMOOTHING, max_time=INF, **kwargs):
     # TODO: move to the meta class
     start_time = time.time()
-    if collision(q1) or collision(q2):
+    if collision_fn(q1) or collision_fn(q2):
         return None
-    path = direct_path(q1, q2, extend, collision)
+    path = direct_path(q1, q2, extend_fn, collision_fn)
     if path is not None:
         return path
     for attempt in irange(restarts + 1):
         # TODO: use the restart wrapper
         if elapsed_time(start_time) >= max_time:
             break
-        path = rrt_connect(q1, q2, distance, sample, extend, collision,
+        path = rrt_connect(q1, q2, distance_fn, sample_fn, extend_fn, collision_fn,
                            max_time=max_time - elapsed_time(start_time), **kwargs)
         if path is not None:
             #print('{} attempts'.format(attempt))
             if smooth is None:
                 return path
-            #return smooth_path_old(path, extend, collision, iterations=smooth)
-            return smooth_path(path, extend, collision, distance_fn=distance, iterations=smooth,
+            #return smooth_path_old(path, extend_fn, collision_fn, iterations=smooth)
+            return smooth_path(path, extend_fn, collision_fn, distance_fn=distance_fn, iterations=smooth,
                                max_time=max_time - elapsed_time(start_time))
     return None

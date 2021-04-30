@@ -64,7 +64,7 @@ def best_first(start, goal, distance_fn, neighbors_fn, collision,
         current = np.array(current)
         if visited[tuple(current)].g != current_g:
             continue
-        # TODO: lazy collision checking
+        # TODO: lazy collision_fn checking
         iterations += 1
         if tuple(current) == tuple(goal):
             return retrace(visited, current)

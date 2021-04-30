@@ -39,7 +39,7 @@ def get_sample_fn(region, obstacles=[], use_halton=True): #, check_collisions=Fa
     generator = interval_generator(lower, upper, use_halton=use_halton)
 
     def region_gen():
-        #area = np.product(upper - lower) # TODO: sample proportional to area
+        #area = np.product(upper - lower) # TODO: sample_fn proportional to area
         for q in generator:
             #q = sample_box(region)
             if collision_fn(q):
@@ -169,8 +169,8 @@ def main():
                 path = rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                                    max_time=args.time)
             elif args.algorithm == 'birrt':
-                path = birrt(start, goal, distance=distance_fn, sample=sample_fn,
-                             extend=extend_fn, collision=collision_fn,
+                path = birrt(start, goal, distance_fn=distance_fn, sample_fn=sample_fn,
+                             extend_fn=extend_fn, collision_fn=collision_fn,
                              max_time=args.time, smooth=100)
             elif args.algorithm == 'rrt_star':
                 path = rrt_star(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
@@ -199,7 +199,7 @@ def main():
             for path in paths:
                 extend_fn, _ = get_extend_fn(obstacles=obstacles)  # obstacles | []
                 smoothed = smooth_path(path, extend_fn, collision_fn, iterations=INF, max_time=args.time)
-                print('Smoothed distance: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
+                print('Smoothed distance_fn: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
                 add_path(viewer, smoothed, color='red')
 
     #########################

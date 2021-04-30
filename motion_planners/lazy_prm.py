@@ -136,7 +136,7 @@ def compute_graph(samples, weights=None, p_norm=2, max_degree=10, max_distance=I
 
 def lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn, num_samples=100,
              weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, **kwargs): #, max_paths=INF):
-    # TODO: compute parameters using start, goal, and sample statistics
+    # TODO: compute parameters using start, goal, and sample_fn statistics
     # TODO: multi-query motion planning
     start_time = time.time()
     # TODO: can embed pose and/or points on the robot for other distances
