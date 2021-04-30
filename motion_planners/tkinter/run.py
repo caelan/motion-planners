@@ -34,7 +34,7 @@ ALGORITHMS = [
 
 def get_sample_fn(region, obstacles=[], use_halton=True): #, check_collisions=False):
     samples = []
-    collision_fn = get_collision_fn(obstacles)
+    collision_fn, _ = get_collision_fn(obstacles)
     lower, upper = region
     generator = interval_generator(lower, upper, use_halton=use_halton)
 
@@ -72,15 +72,19 @@ def get_threshold_fn():
     return threshold_fn
 
 def get_collision_fn(obstacles):
+    cfree = []
 
     def collision_fn(q):
         #time.sleep(1e-3)
-        return point_collides(q, obstacles)
+        if point_collides(q, obstacles):
+            return True
+        cfree.append(q)
+        return False
 
-    return collision_fn
+    return collision_fn, cfree
 
 def get_extend_fn(obstacles=[]):
-    #collision_fn = get_collision_fn(obstacles)
+    #collision_fn, cfree = get_collision_fn(obstacles)
     roadmap = []
 
     def extend_fn(q1, q2):
@@ -106,7 +110,7 @@ def main():
 
     np.set_printoptions(precision=3)
     parser = argparse.ArgumentParser()
-    parser.add_argument('-a', '--algorithm', default=None,
+    parser.add_argument('-a', '--algorithm', default='rrt_connect',
                         help='The algorithm seed to use.')
     parser.add_argument('-d', '--draw', action='store_true',
                         help='When enabled, draws the roadmap')
@@ -141,7 +145,6 @@ def main():
     #########################
 
     #connected_test, roadmap = get_connected_test(obstacles)
-    collision_fn = get_collision_fn(obstacles)
     distance_fn = get_distance_fn(weights=[1, 1]) # distance_fn
 
     # samples = list(islice(region_gen('env'), 100))
@@ -149,6 +152,7 @@ def main():
         # TODO: cost bound & best cost
         for _ in range(args.restarts+1):
             start_time = time.time()
+            collision_fn, cfree = get_collision_fn(obstacles)
             sample_fn, samples = get_sample_fn(regions['env'], obstacles=[]) # obstacles
             extend_fn, roadmap = get_extend_fn(obstacles=obstacles)  # obstacles | []
 
@@ -172,7 +176,7 @@ def main():
                 path = rrt_star(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                                 radius=1, max_iterations=INF, max_time=args.time)
             elif args.algorithm == 'lattice':
-                path = lattice(start, goal, distance_fn, extend_fn, collision_fn)
+                path = lattice(start, goal, extend_fn, collision_fn, distance_fn=distance_fn)
             else:
                 raise NotImplementedError(args.algorithm)
             paths = [] if path is None else [path]
@@ -201,9 +205,10 @@ def main():
     #########################
 
     if args.draw:
-        #roadmap = samples = []
+        #roadmap = samples = cfree = []
         add_roadmap(viewer, roadmap, color='black')
-        add_points(viewer, samples, color='blue')
+        #add_points(viewer, samples, color='blue')
+        add_points(viewer, cfree, color='green', radius=2,)
 
     #if path is None:
     #    user_input('Finish?')
