@@ -1,11 +1,12 @@
 from scipy.spatial.kdtree import KDTree
 from heapq import heappush, heappop
 from collections import namedtuple
-from .utils import INF, elapsed_time, get_pairs, randomize, bisect, traverse
+
+from motion_planners.utils import random_selector, default_selector
+from .utils import INF, elapsed_time, get_pairs
 from .rrt_connect import direct_path
 from .smoothing import smooth_path
 
-import random
 import time
 import numpy as np
 
@@ -73,22 +74,6 @@ def get_distance_fn(weights, p_norm=2):
 
 ##################################################
 
-def forward_selector(path):
-    return list(path)
-
-def backward_selector(path):
-    return list(path)
-
-def random_selector(path):
-    return randomize(path)
-
-def bisect_selector(path):
-    return bisect(path)
-
-selector = bisect_selector # TODO: traverse
-
-##################################################
-
 def check_vertex(v, samples, colliding_vertices, collision_fn):
     if v not in colliding_vertices:
         colliding_vertices[v] = collision_fn(samples[v])
@@ -96,7 +81,7 @@ def check_vertex(v, samples, colliding_vertices, collision_fn):
 
 def check_edge(v1, v2, samples, colliding_edges, collision_fn, extend_fn):
     if (v1, v2) not in colliding_edges:
-        segment = selector(extend_fn(samples[v1], samples[v2]))
+        segment = default_selector(extend_fn(samples[v1], samples[v2]))
         colliding_edges[v1, v2] = any(map(collision_fn, segment))
         colliding_edges[v2, v1] = colliding_edges[v1, v2]
     return not colliding_edges[v1, v2]
@@ -105,7 +90,7 @@ def check_path(path, colliding_vertices, colliding_edges, samples, extend_fn, co
     for v in random_selector(path):
         if not check_vertex(v, samples, colliding_vertices, collision_fn):
             return False
-    for v1, v2 in selector(get_pairs(path)):
+    for v1, v2 in default_selector(get_pairs(path)):
         if not check_edge(v1, v2, samples, colliding_edges, collision_fn, extend_fn):
             return False
     return True

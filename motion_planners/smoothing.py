@@ -1,6 +1,6 @@
 from random import randint, random
 from .utils import INF, elapsed_time, irange, waypoints_from_path, get_pairs, get_distance, \
-    convex_combination, flatten, traverse, compute_path_cost
+    convex_combination, flatten, compute_path_cost, default_selector
 
 import time
 import numpy as np
@@ -22,7 +22,7 @@ def smooth_path_old(path, extend_fn, collision_fn, iterations=50, max_time=INF, 
         if j < i:
             i, j = j, i
         shortcut = list(extend_fn(smoothed_path[i], smoothed_path[j]))
-        if (len(shortcut) < (j - i)) and all(not collision_fn(q) for q in traverse(shortcut)):
+        if (len(shortcut) < (j - i)) and all(not collision_fn(q) for q in default_selector(shortcut)):
             smoothed_path = smoothed_path[:i + 1] + shortcut + smoothed_path[j + 1:]
     return smoothed_path
 
@@ -70,7 +70,7 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, iterations=50, 
         new_waypoints = waypoints[:i+1] + [point1, point2] + waypoints[j:] # TODO: reuse computation
         if compute_path_cost(new_waypoints, cost_fn=distance_fn) >= total_distance:
             continue
-        if all(not collision_fn(q) for q in traverse(extend_fn(point1, point2))):
+        if all(not collision_fn(q) for q in default_selector(extend_fn(point1, point2))):
             waypoints = new_waypoints
     #return waypoints
     return refine_waypoints(waypoints, extend_fn)

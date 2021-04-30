@@ -99,13 +99,6 @@ def bisect(sequence):
         ])
 
 
-def traverse(sequence, random=True):
-    # TODO: integrate with selectors
-    if random:
-        return randomize(sequence)
-    return bisect(sequence)
-
-
 def take(iterable, n=INF):
     if n == INF:
         n = None  # NOTE - islice takes None instead of INF
@@ -226,3 +219,23 @@ def interval_generator(lower, upper, **kwargs):
     if np.equal(lower, upper).all():
         return iter([lower])
     return (convex_combination(lower, upper, w=weights) for weights in unit_generator(d=len(lower), **kwargs))
+
+##################################################
+
+def forward_selector(path):
+    return path
+
+
+def backward_selector(path):
+    return reversed(list(path))
+
+
+def random_selector(path):
+    return randomize(path)
+
+
+def bisect_selector(path):
+    return bisect(path)
+
+
+default_selector = bisect_selector

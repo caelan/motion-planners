@@ -123,6 +123,8 @@ def main():
                         help='The maximum runtime.')
     args = parser.parse_args()
 
+    #########################
+
     obstacles = [
         create_box(center=(.35, .75), extents=(.25, .25)),
         create_box(center=(.75, .35), extents=(.225, .225)),
@@ -188,6 +190,8 @@ def main():
 
             # paths = exhaustively_select_portfolio(paths, k=2)
             # print(score_portfolio(paths))
+
+            #########################
 
             if args.draw:
                 # roadmap = samples = cfree = []
