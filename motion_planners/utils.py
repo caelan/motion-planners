@@ -130,6 +130,14 @@ def inf_sequence():
     return iter(int, 1)
 
 
+def find(test, sequence):
+    for item in sequence:
+        if test(item):
+            return item
+    raise RuntimeError()
+
+##################################################
+
 def get_delta(q1, q2):
     return np.array(q2) - np.array(q1)
 

@@ -9,7 +9,7 @@ from .viewer import sample_box, is_collision_free, \
     create_box, draw_environment, point_collides, sample_line, add_points, \
     add_roadmap, get_box_center, add_path, get_distance_fn, create_cylinder
 from ..utils import user_input, profiler, INF, compute_path_cost, get_distance, elapsed_time, interval_generator, \
-    get_pairs, remove_redundant, waypoints_from_path
+    get_pairs, remove_redundant, waypoints_from_path, find
 from ..prm import prm
 from ..lazy_prm import lazy_prm
 from ..rrt_connect import rrt_connect, birrt
@@ -177,10 +177,10 @@ def smooth(positions_curve, v_max, a_max, num=100):
         if t is None:
             continue
         #assert t is not None
-        print(t, t2 - t1)
+        #print(t, t2 - t1)
 
-        i1, i2 = [min(range(len(times)), key=lambda i: times[i] >= t) for t in ts]
-        new_times = np.concatenate([times[:i1+1], [t1, t2], times[i2:]])
+        i1, i2 = [find(lambda i: times[i] >= t, range(len(times))) for t in ts]
+        new_times = np.concatenate([times[:i1], [t1, t2], times[i2:]])
         #new_times = [ts[0], ts[-1] + t]
         positions = [positions_curve(t) for t in new_times]
         velocities = [velocities_curve(t) for t in new_times]
@@ -193,16 +193,15 @@ def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | sli
     waypoints = remove_redundant(path)
     waypoints = waypoints_from_path(waypoints)
 
-    print(len(path), len(waypoints))
+    #print(len(path), len(waypoints))
     differences = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
     times = np.cumsum(differences) / velocity
-    print(times)
     #positions_curve = interp1d(times, waypoints, kind=kind, axis=0, **kwargs)
     #positions_curve = CubicSpline(times, waypoints, bc_type='clamped')
     velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
     positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
-    velocities_curve = positions_curve.derivative()
-    print([velocities_curve(t) for t in times])
+    #velocities_curve = positions_curve.derivative()
+    #print([velocities_curve(t) for t in times])
 
     d = len(path[0])
     v_max = 5.*np.ones(d)
@@ -210,9 +209,13 @@ def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | sli
     positions_curve = smooth(positions_curve, v_max, a_max, num=100)
     return positions_curve
 
-def discretize_curve(positions_curve, time_step=1e-2):
-    control_times = np.append(np.arange(
-        positions_curve.x[0], positions_curve.x[-1], step=time_step), [positions_curve.x[-1]])
+def discretize_curve(positions_curve, start_t=None, end_t=None, time_step=1e-2):
+    if start_t is None:
+        start_t = positions_curve.x[0]
+    if end_t is None:
+        end_t = positions_curve.x[-1]
+    assert start_t < end_t
+    control_times = np.append(np.arange(start_t, end_t, step=time_step), [end_t])
     #velocities_curve = positions_curve.derivative()
     control_positions = [positions_curve(control_time) for control_time in control_times]
     return control_times, control_positions
