@@ -108,7 +108,7 @@ def solve_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
         2 * v1,
         (v1**2 - v2**2) / (2 * a_max) + (x1 - x2),
     ])
-    solutions = [t for t in solutions if not isinstance(t, complex) and (t >= 0)]
+    solutions = [t for t in solutions if not isinstance(t, complex) and (t >= 0.)]
     #solutions = [t for t in solutions if t <= (v2 - v1) / a_max] # TODO: this constraint is strange
     solutions = [t for t in solutions if abs(v1 + t*a_max) <= abs(v_max)]
     if not solutions:
@@ -142,14 +142,50 @@ def solve_ramp(x1, x2, v1, v2, v_max, a_max):
         solve_three_ramp(x1, x2, v1, v2, v_max, a_max),
         solve_three_ramp(x1, x2, v1, v2, -v_max, -a_max),
     ]
-    return min(t for t in candidates if t is not None)
+    candidates = [t for t in candidates if t is not None]
+    if not candidates:
+        return None
+    return min(t for t in candidates)
 
 def solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max):
     d = len(x1)
-    return max(solve_ramp(x1[i], x2[i], v1[i], v2[i], v_max[i], a_max[i])
-               for i in range(d))
+    durations = [solve_ramp(x1[i], x2[i], v1[i], v2[i], v_max[i], a_max[i]) for i in range(d)]
+    # if any(t is None for t in durations):
+    #     return None
+    durations = [t for t in durations if t is not None]
+    if not durations:
+        return None
+    return max(durations)
 
 ##################################################
+
+def smooth(positions_curve, v_max, a_max, num=100):
+    from scipy.interpolate import CubicHermiteSpline
+    for _ in range(num):
+        times = positions_curve.x
+        velocities_curve = positions_curve.derivative()
+        # ts = [times[0], times[-1]]
+        # t1, t2 = positions_curve.x[0], positions_curve.x[-1]
+        t1, t2 = np.random.uniform(times[0], times[-1], 2)
+        if t1 > t2:
+            t1, t2 = t2, t1
+        ts = [t1, t2]
+
+        x1, x2 = [positions_curve(t) for t in ts]
+        v1, v2 = [velocities_curve(t) for t in ts]
+        t = solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max)
+        if t is None:
+            continue
+        #assert t is not None
+        print(t, t2 - t1)
+
+        i1, i2 = [min(range(len(times)), key=lambda i: times[i] >= t) for t in ts]
+        new_times = np.concatenate([times[:i1+1], [t1, t2], times[i2:]])
+        #new_times = [ts[0], ts[-1] + t]
+        positions = [positions_curve(t) for t in new_times]
+        velocities = [velocities_curve(t) for t in new_times]
+        positions_curve = CubicHermiteSpline(new_times, positions, dydx=velocities)
+    return positions_curve
 
 def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | slinear | quadratic | cubic
     from scipy.interpolate import interp1d, CubicHermiteSpline, make_interp_spline, CubicSpline
@@ -171,27 +207,7 @@ def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | sli
     d = len(path[0])
     v_max = 5.*np.ones(d)
     a_max = v_max / 1.
-
-    # ts = [times[0], times[-1]]
-    # t1, t2 = positions_curve.x[0], positions_curve.x[-1]
-    t1, t2 = np.random.uniform(positions_curve.x[0], positions_curve.x[-1], 2)
-    if t1 > t2:
-        t1, t2 = t2, t1
-    ts = [t1, t2]
-
-    #n1, n2 = [min(positions_curve.x, key=lambda n: n >= t) for t in ts]
-    # new_times = []
-    x1, x2 = [positions_curve(t) for t in ts]
-    v1, v2 = [velocities_curve(t) for t in ts]
-    t = solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max)
-    assert t is not None
-    print(t, t2 - t1)
-
-    times = [ts[0], ts[-1] + t]
-    positions = [x1, x2]
-    velocities = [v1, v2]
-    positions_curve = CubicHermiteSpline(times, positions, dydx=velocities)
-
+    positions_curve = smooth(positions_curve, v_max, a_max, num=100)
     return positions_curve
 
 def discretize_curve(positions_curve, time_step=1e-2):
