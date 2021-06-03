@@ -146,13 +146,17 @@ def solve_three_ramp(x1, x2, v1, v2, v_max, a_max):
     return T
 
 def solve_ramp(x1, x2, v1, v2, v_max, a_max):
+    # TODO: handle infinite acceleration
     assert all(abs(v) <= v_max for v in [v1, v2])
     candidates = [
         solve_two_ramp(x1, x2, v1, v2, a_max, v_max=v_max),
         solve_two_ramp(x1, x2, v1, v2, -a_max, v_max=-v_max),
-        solve_three_ramp(x1, x2, v1, v2, v_max, a_max),
-        solve_three_ramp(x1, x2, v1, v2, -v_max, -a_max),
     ]
+    if v_max < INF:
+        candidates.extend([
+            solve_three_ramp(x1, x2, v1, v2, v_max, a_max),
+            solve_three_ramp(x1, x2, v1, v2, -v_max, -a_max),
+        ])
     candidates = [t for t in candidates if t is not None]
     if not candidates:
         return None
@@ -231,12 +235,17 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
 
     return positions_curve
 
+V_MAX = 5.*np.ones(2)
+A_MAX = V_MAX / 2.
+
 def retime_path(path, velocity=1., **kwargs):
     from scipy.interpolate import CubicHermiteSpline
+    d = len(path[0])
     waypoints = remove_redundant(path)
     waypoints = waypoints_from_path(waypoints)
-    # TODO: ramp
-    differences = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
+    #differences = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
+    differences = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), V_MAX, A_MAX)
+                          for x1, x2 in get_pairs(waypoints)]
     times = np.cumsum(differences) / velocity
     velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
     positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
@@ -244,7 +253,7 @@ def retime_path(path, velocity=1., **kwargs):
     d = len(path[0])
     v_max = 5.*np.ones(d)
     a_max = v_max / 1.
-    positions_curve = smooth(positions_curve, v_max, a_max, **kwargs)
+    #positions_curve = smooth(positions_curve, v_max, a_max, **kwargs)
     return positions_curve
 
 def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | slinear | quadratic | cubic
@@ -269,6 +278,27 @@ def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | sli
     positions_curve = smooth(positions_curve, v_max, a_max)
     return positions_curve
 
+def find_max_velocity(positions_curve, start_t=None, end_t=None, num=10):
+    from scipy.optimize import minimize_scalar, minimize #, line_search, brute
+    if start_t is None:
+        start_t = positions_curve.x[0]
+    if end_t is None:
+        end_t = positions_curve.x[-1]
+    velocities_curve = positions_curve.derivative()
+    objective = lambda t: -np.linalg.norm(velocities_curve(t), ord=2)
+    #objective = lambda t: -np.linalg.norm(velocities_curve(t), ord=2)**2 # t[0]
+    #accelerations_curve = positions_curve.derivative() # TODO: ValueError: failed in converting 7th argument `g' of _lbfgsb.setulb to C/Fortran array
+    #grad = lambda t: np.array([-2*sum(accelerations_curve(t))])
+    #result = minimize_scalar(objective, method='bounded', bounds=(start_t, end_t)) #, options={'disp': False})
+    best_t, best_f = None, INF
+    for iteration in range(num):
+        t0 = random.uniform(start_t, end_t)
+        result = minimize(objective, x0=[t0], method=None, jac=None, bounds=[(start_t, end_t)])
+        if result.fun < best_f:
+            best_t, best_f = result.x[0], result.fun
+        #print(iteration, t0, result.x, result.fun) # objective(result.x)
+    return best_t, -best_f
+
 def time_discretize_curve(positions_curve, start_t=None, end_t=None, time_step=1e-2):
     if start_t is None:
         start_t = positions_curve.x[0]
@@ -280,21 +310,9 @@ def time_discretize_curve(positions_curve, start_t=None, end_t=None, time_step=1
     #velocities_curve = positions_curve.derivative()
     positions = [positions_curve(t) for t in times]
 
-
-    from scipy.optimize import minimize_scalar, minimize #, line_search, brute
-
-    velocities_curve = positions_curve.derivative()
-    accelerations_curve = positions_curve.derivative()
-    objective = lambda t: -np.linalg.norm(velocities_curve(t), ord=2) # TODO: square, pass gradient
-    #result = minimize_scalar(objective, method='bounded', bounds=(start_t, end_t)) #, options={'disp': False})
-
-    jac = []
-    for iteration in range(10):
-        x0 = random.uniform(start_t, end_t)
-        result = minimize(objective, x0=x0, method=None, jac=None, bounds=[(start_t, end_t)])
-        print(iteration, x0, result.x, result.fun, objective(result.x))
+    max_t, max_v = find_max_velocity(positions_curve, start_t=start_t, end_t=end_t)
+    print('Max velocity: {:.3f} (at time {:.3f})'.format(max_v, max_t))
     input()
-
 
     return times, positions
 
@@ -358,6 +376,7 @@ def main():
     parser.add_argument('-t', '--time', default=1., type=float,
                         help='The maximum runtime.')
     args = parser.parse_args()
+    print(args)
 
     seed = None # None | 0
     random.seed(seed)
@@ -404,7 +423,7 @@ def main():
         for _ in range(args.restarts+1):
             start_time = time.time()
             collision_fn, cfree = get_collision_fn(environment, obstacles)
-            sample_fn, samples = get_sample_fn(environment, obstacles=[]) # obstacles
+            sample_fn, samples = get_sample_fn(environment, obstacles=[], use_halton=False) # obstacles
             extend_fn, roadmap = get_extend_fn(environment, obstacles=obstacles)  # obstacles | []
 
             if args.algorithm == 'prm':
@@ -418,11 +437,11 @@ def main():
                            iterations=INF, max_time=args.time)
             elif args.algorithm == 'rrt_connect':
                 path = rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
-                                   max_time=args.time)
+                                   iterations=INF, max_time=args.time)
             elif args.algorithm == 'birrt':
                 path = birrt(start, goal, distance_fn=distance_fn, sample_fn=sample_fn,
                              extend_fn=extend_fn, collision_fn=collision_fn,
-                             max_time=args.time, smooth=100)
+                             iterations=INF, max_time=args.time, smooth=100)
             elif args.algorithm == 'rrt_star':
                 path = rrt_star(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                                 radius=1, max_iterations=INF, max_time=args.time)
