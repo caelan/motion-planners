@@ -119,6 +119,12 @@ def sample_box(box):
     (lower, upper) = box
     return np.random.random(len(lower)) * get_box_extent(box) + lower
 
+def sample_circle(circle):
+    center, radius = circle
+    theta = np.random.uniform(low=0, high=2*np.pi)
+    direction = np.array([np.cos(theta), np.sin(theta)])
+    return np.array(center) + direction
+
 #################################################################
 
 def draw_shape(viewer, shape, **kwargs):

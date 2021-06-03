@@ -8,14 +8,15 @@ import time
 from .viewer import sample_box, is_collision_free, \
     create_box, draw_environment, point_collides, sample_line, add_points, \
     add_roadmap, get_box_center, add_path, get_distance_fn, create_cylinder
-from ..utils import user_input, profiler, INF, compute_path_cost, get_distance, elapsed_time, interval_generator
+from ..utils import user_input, profiler, INF, compute_path_cost, get_distance, elapsed_time, interval_generator, \
+    get_pairs, remove_redundant, waypoints_from_path
 from ..prm import prm
 from ..lazy_prm import lazy_prm
 from ..rrt_connect import rrt_connect, birrt
 from ..rrt import rrt
 from ..rrt_star import rrt_star
 from ..smoothing import smooth_path
-from motion_planners.lattice import lattice
+from ..lattice import lattice
 from ..meta import random_restarts
 from ..diverse import score_portfolio, exhaustively_select_portfolio
 
@@ -101,6 +102,28 @@ def get_extend_fn(obstacles=[]):
 
 ##################################################
 
+def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | slinear | quadratic | cubic
+    from scipy.interpolate import interp1d, CubicHermiteSpline, make_interp_spline, CubicSpline
+    #from numpy import polyfit
+    waypoints = remove_redundant(path)
+    waypoints = waypoints_from_path(waypoints)
+    print(len(path), len(waypoints))
+    differences = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
+    times = np.cumsum(differences) / velocity
+    curve = interp1d(times, waypoints, kind=kind, axis=0, **kwargs)
+    #curve = CubicSpline(times, waypoints)
+
+    return curve
+
+def discretize_curve(positions_curve, time_step=1e-2):
+    control_times = np.append(np.arange(
+        positions_curve.x[0], positions_curve.x[-1], step=time_step), [positions_curve.x[-1]])
+    #velocities_curve = positions_curve.derivative()
+    control_positions = [positions_curve(control_time) for control_time in control_times]
+    return control_times, control_positions
+
+##################################################
+
 def main():
     """
     Creates and solves the 2D motion planning problem.
@@ -127,8 +150,10 @@ def main():
 
     obstacles = [
         create_box(center=(.35, .75), extents=(.25, .25)),
-        create_box(center=(.75, .35), extents=(.225, .225)),
-        create_box(center=(.5, .5), extents=(.225, .225)),
+        create_box(center=(.75, .35), extents=(.25, .25)),
+        #create_box(center=(.75, .35), extents=(.225, .225)),
+        create_box(center=(.5, .5), extents=(.25, .25)),
+        #create_box(center=(.5, .5), extents=(.225, .225)),
         create_cylinder(center=(.25, .25), radius=.1),
     ]
 
@@ -207,7 +232,11 @@ def main():
             print('Solutions ({}): {} | Time: {:.3f}'.format(len(paths), [(len(path), round(compute_path_cost(
                 path, distance_fn), 3)) for path in paths], elapsed_time(start_time)))
             for path in paths:
+                path = waypoints_from_path(path)
                 add_path(viewer, path, color='green')
+                curve = interpolate_path(path)
+                _, path = discretize_curve(curve)
+                add_path(viewer, path, color='red')
 
             if args.smooth:
                 for path in paths:
