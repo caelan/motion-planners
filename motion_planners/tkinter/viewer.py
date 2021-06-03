@@ -63,11 +63,22 @@ class PRMViewer(object):
 
 #################################################################
 
-def contains(q, box):
+def contains_box(point, box):
     (lower, upper) = box
-    return np.greater_equal(q, lower).all() and \
-           np.greater_equal(upper, q).all()
-    #return np.all(q >= lower) and np.all(upper >= q)
+    return np.greater_equal(point, lower).all() and \
+           np.greater_equal(upper, point).all()
+    #return np.all(point >= lower) and np.all(upper >= point)
+
+def contains_circle(point, circle):
+    center, radius = circle
+    return np.linalg.norm(np.array(point) - np.array(center)) <= radius
+
+def contains(point, shape):
+    if isinstance(shape, Box):
+        return contains_box(point, shape)
+    if isinstance(shape, Circle):
+        return contains_circle(point, shape)
+    raise NotImplementedError(shape)
 
 def point_collides(point, boxes):
     return any(contains(point, box) for box in boxes)
@@ -93,6 +104,9 @@ def create_box(center, extents):
     upper = (x + w / 2., y + h / 2.)
     return Box(np.array(lower), np.array(upper))
 
+def create_cylinder(center, radius):
+    return Circle(center, radius)
+
 def get_box_center(box):
     lower, upper = box
     return np.average([lower, upper], axis=0)
@@ -107,13 +121,22 @@ def sample_box(box):
 
 #################################################################
 
+def draw_shape(viewer, shape, **kwargs):
+    if isinstance(shape, Box):
+        return viewer.draw_rectangle(shape, **kwargs)
+    if isinstance(shape, Circle):
+        center, radius = shape
+        return viewer.draw_circle(center, radius, **kwargs)
+    raise NotImplementedError(shape)
+
 def draw_environment(obstacles, regions, **kwargs):
     viewer = PRMViewer(**kwargs)
-    for box in obstacles:
-        viewer.draw_rectangle(box, color='brown')
+    for obstacle in obstacles:
+        draw_shape(viewer, obstacle, color='brown')
     for name, region in regions.items():
-        if name != 'env':
-            viewer.draw_rectangle(region, color='green')
+        if name == 'env':
+            continue
+        draw_shape(viewer, region, color='green')
     return viewer
 
 def add_segments(viewer, segments, step_size=INF, **kwargs):

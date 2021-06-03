@@ -7,7 +7,7 @@ import time
 
 from .viewer import sample_box, is_collision_free, \
     create_box, draw_environment, point_collides, sample_line, add_points, \
-    add_roadmap, get_box_center, add_path, get_distance_fn
+    add_roadmap, get_box_center, add_path, get_distance_fn, create_cylinder
 from ..utils import user_input, profiler, INF, compute_path_cost, get_distance, elapsed_time, interval_generator
 from ..prm import prm
 from ..lazy_prm import lazy_prm
@@ -129,6 +129,7 @@ def main():
         create_box(center=(.35, .75), extents=(.25, .25)),
         create_box(center=(.75, .35), extents=(.225, .225)),
         create_box(center=(.5, .5), extents=(.225, .225)),
+        create_cylinder(center=(.25, .25), radius=.1),
     ]
 
     # TODO: alternate sampling from a mix of regions
