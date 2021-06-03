@@ -115,6 +115,8 @@ def solve_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
         return None
     t = min(solutions)
     T = t + 2 * (v1 - v2) / a_max
+    if T < 0:
+        return None
     return T
 
 def solve_three_ramp(x1, x2, v1, v2, v_max, a_max):
@@ -135,8 +137,8 @@ def solve_three_ramp(x1, x2, v1, v2, v_max, a_max):
 def solve_ramp(x1, x2, v1, v2, v_max, a_max):
     assert all(abs(v) <= v_max for v in [v1, v2])
     candidates = [
-        solve_two_ramp(x1, x2, v1, v2, a_max, v_max),
-        solve_two_ramp(x1, x2, v1, v2, -a_max, -v_max),
+        solve_two_ramp(x1, x2, v1, v2, a_max, v_max=v_max),
+        solve_two_ramp(x1, x2, v1, v2, -a_max, v_max=-v_max),
         solve_three_ramp(x1, x2, v1, v2, v_max, a_max),
         solve_three_ramp(x1, x2, v1, v2, -v_max, -a_max),
     ]
@@ -166,6 +168,10 @@ def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | sli
     velocities_curve = positions_curve.derivative()
     print([velocities_curve(t) for t in times])
 
+    d = len(path[0])
+    v_max = 5.*np.ones(d)
+    a_max = v_max / 1.
+
     # ts = [times[0], times[-1]]
     # t1, t2 = positions_curve.x[0], positions_curve.x[-1]
     t1, t2 = np.random.uniform(positions_curve.x[0], positions_curve.x[-1], 2)
@@ -173,25 +179,19 @@ def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | sli
         t1, t2 = t2, t1
     ts = [t1, t2]
 
-
-
+    #n1, n2 = [min(positions_curve.x, key=lambda n: n >= t) for t in ts]
+    # new_times = []
     x1, x2 = [positions_curve(t) for t in ts]
     v1, v2 = [velocities_curve(t) for t in ts]
-    d = len(x1)
-    v_max = 10.*np.ones(d)
-    a_max = v_max / 1.
-
-    print(x1, x2, v1, v2, v_max, a_max)
     t = solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max)
     assert t is not None
-    print(t)
-    input()
+    print(t, t2 - t1)
+
     times = [ts[0], ts[-1] + t]
     positions = [x1, x2]
     velocities = [v1, v2]
     positions_curve = CubicHermiteSpline(times, positions, dydx=velocities)
 
-    print(t)
     return positions_curve
 
 def discretize_curve(positions_curve, time_step=1e-2):
