@@ -5,6 +5,8 @@ from .utils import INF, elapsed_time, irange, waypoints_from_path, get_pairs, ge
 import time
 import numpy as np
 
+##################################################
+
 def smooth_path_old(path, extend_fn, collision_fn, iterations=50, max_time=INF, verbose=False, **kwargs):
     """
     :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
@@ -33,6 +35,8 @@ def smooth_path_old(path, extend_fn, collision_fn, iterations=50, max_time=INF, 
         if (len(shortcut) < (j - i)) and all(not collision_fn(q) for q in default_selector(shortcut)):
             smoothed_path = smoothed_path[:i + 1] + shortcut + smoothed_path[j + 1:]
     return smoothed_path
+
+##################################################
 
 def refine_waypoints(waypoints, extend_fn):
     #if len(waypoints) <= 1:

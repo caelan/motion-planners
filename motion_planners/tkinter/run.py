@@ -159,7 +159,7 @@ def solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max):
 
 ##################################################
 
-def smooth(positions_curve, v_max, a_max, num=100):
+def smooth(positions_curve, v_max, a_max, collision_fn=lambda q: False, num=100):
     from scipy.interpolate import CubicHermiteSpline
     for _ in range(num):
         times = positions_curve.x
@@ -184,7 +184,26 @@ def smooth(positions_curve, v_max, a_max, num=100):
         #new_times = [ts[0], ts[-1] + t]
         positions = [positions_curve(t) for t in new_times]
         velocities = [velocities_curve(t) for t in new_times]
-        positions_curve = CubicHermiteSpline(new_times, positions, dydx=velocities)
+        new_positions_curve = CubicHermiteSpline(new_times, positions, dydx=velocities)
+        #_, samples = discretize_curve(new_positions_curve, time_step=1e-2)
+        _, samples = discretize_curve(new_positions_curve, start_t=t1, end_t=t2, time_step=1e-2)
+        if not any(map(collision_fn, samples)):
+            positions_curve = new_positions_curve
+    return positions_curve
+
+def retime_path(path, velocity=1., **kwargs):
+    from scipy.interpolate import CubicHermiteSpline
+    waypoints = remove_redundant(path)
+    waypoints = waypoints_from_path(waypoints)
+    differences = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
+    times = np.cumsum(differences) / velocity
+    velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
+    positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
+
+    d = len(path[0])
+    v_max = 5.*np.ones(d)
+    a_max = v_max / 1.
+    positions_curve = smooth(positions_curve, v_max, a_max, num=100, **kwargs)
     return positions_curve
 
 def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | slinear | quadratic | cubic
@@ -333,7 +352,8 @@ def main():
                 #path = path[:1] + path[-2:]
                 path = waypoints_from_path(path)
                 add_path(viewer, path, color='green')
-                curve = interpolate_path(path)
+                #curve = interpolate_path(path) # , collision_fn=collision_fn)
+                curve = retime_path(path, collision_fn=collision_fn)
                 _, path = discretize_curve(curve)
                 add_path(viewer, path, color='red')
 
