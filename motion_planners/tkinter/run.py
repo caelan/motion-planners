@@ -6,9 +6,10 @@ import argparse
 import time
 import random
 
+from motion_planners.utils import get_delta
 from .viewer import sample_box, is_collision_free, \
     create_box, draw_environment, point_collides, sample_line, add_points, \
-    add_roadmap, get_box_center, add_path, get_distance_fn, create_cylinder, contains
+    add_roadmap, get_box_center, add_path, create_cylinder, contains
 from ..utils import user_input, profiler, INF, compute_path_cost, get_distance, elapsed_time, interval_generator, \
     get_pairs, remove_redundant, waypoints_from_path, find
 from ..prm import prm
@@ -102,6 +103,13 @@ def get_extend_fn(environment, obstacles=[]):
                 path.append(q)
 
     return extend_fn, roadmap
+
+def get_distance_fn(weights):
+    difference_fn = get_delta
+    def fn(q1, q2):
+        diff = np.array(difference_fn(q2, q1))
+        return np.sqrt(np.dot(weights, diff * diff))
+    return fn
 
 ##################################################
 
@@ -215,8 +223,8 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
         print(iteration, new_positions_curve.x[-1], positions_curve.x[-1])
         if new_positions_curve.x[-1] >= positions_curve.x[-1]:
             continue
-        _, samples = discretize_curve(new_positions_curve, time_step=1e-2)
-        #_, samples = discretize_curve(new_positions_curve, start_t=new_times[i1+1], end_t=new_times[-(len(times) - i2 - 1)], time_step=1e-2)
+        _, samples = discretize_curve(new_positions_curve)
+        #_, samples = discretize_curve(new_positions_curve, start_t=new_times[i1+1], end_t=new_times[-(len(times) - i2 - 1)])
         if not any(map(collision_fn, samples)):
             positions_curve = new_positions_curve
     print(start_positions_curve.x[-1], positions_curve.x[-1])
@@ -227,6 +235,7 @@ def retime_path(path, velocity=1., **kwargs):
     from scipy.interpolate import CubicHermiteSpline
     waypoints = remove_redundant(path)
     waypoints = waypoints_from_path(waypoints)
+    # TODO: ramp
     differences = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
     times = np.cumsum(differences) / velocity
     velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
@@ -260,18 +269,38 @@ def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | sli
     positions_curve = smooth(positions_curve, v_max, a_max)
     return positions_curve
 
-def discretize_curve_asdf(positions_curve, start_t=None, end_t=None, time_step=1e-2):
+def time_discretize_curve(positions_curve, start_t=None, end_t=None, time_step=1e-2):
     if start_t is None:
         start_t = positions_curve.x[0]
     if end_t is None:
         end_t = positions_curve.x[-1]
     assert start_t < end_t
-    control_times = np.append(np.arange(start_t, end_t, step=time_step), [end_t])
+    times = np.append(np.arange(start_t, end_t, step=time_step), [end_t])
+    #times = positions_curve.x
     #velocities_curve = positions_curve.derivative()
-    control_positions = [positions_curve(control_time) for control_time in control_times]
-    return control_times, control_positions
+    positions = [positions_curve(t) for t in times]
 
-def discretize_curve(positions_curve, start_t=None, end_t=None, resolution=1e-2, time_step=1e-3):
+
+    from scipy.optimize import minimize_scalar, minimize #, line_search, brute
+
+    velocities_curve = positions_curve.derivative()
+    accelerations_curve = positions_curve.derivative()
+    objective = lambda t: -np.linalg.norm(velocities_curve(t), ord=2) # TODO: square, pass gradient
+    #result = minimize_scalar(objective, method='bounded', bounds=(start_t, end_t)) #, options={'disp': False})
+
+    jac = []
+    for iteration in range(10):
+        x0 = random.uniform(start_t, end_t)
+        result = minimize(objective, x0=x0, method=None, jac=None, bounds=[(start_t, end_t)])
+        print(iteration, x0, result.x, result.fun, objective(result.x))
+    input()
+
+
+    return times, positions
+
+discretize_curve = time_discretize_curve
+
+def derivative_discretize_curve(positions_curve, start_t=None, end_t=None, resolution=1e-2, time_step=1e-3):
     d = positions_curve.c.shape[-1]
     resolutions = resolution*np.ones(d)
     if start_t is None:
@@ -280,13 +309,12 @@ def discretize_curve(positions_curve, start_t=None, end_t=None, resolution=1e-2,
         end_t = positions_curve.x[-1]
     assert start_t < end_t
     velocities_curve = positions_curve.derivative()
+    acceleration_curve = velocities_curve.derivative()
     times = [start_t]
     while True:
         velocities = velocities_curve(times[-1])
         dt = min(np.divide(resolutions, np.absolute(velocities)))
-        print(dt)
         dt = min(dt, time_step)
-        #dt = time_step
         new_time = times[-1] + dt
         if new_time > end_t:
             break
@@ -294,8 +322,18 @@ def discretize_curve(positions_curve, start_t=None, end_t=None, resolution=1e-2,
     times.append(end_t)
     positions = [positions_curve(control_time) for control_time in times]
     # TODO: distance between adjacent positions
-    print(times)
     return times, positions
+
+def integral_discretize_curve(positions_curve, start_t=None, end_t=None, resolution=1e-2):
+    #from scipy.integrate import quad
+    if start_t is None:
+        start_t = positions_curve.x[0]
+    if end_t is None:
+        end_t = positions_curve.x[-1]
+    assert start_t < end_t
+    distance_curve = positions_curve.antiderivative()
+    #distance = positions_curve.integrate(a, b)
+    raise NotImplementedError()
 
 ##################################################
 
@@ -418,6 +456,7 @@ def main():
                 #curve = interpolate_path(path) # , collision_fn=collision_fn)
                 curve = retime_path(path, collision_fn=collision_fn)
                 _, path = discretize_curve(curve)
+                #add_points(viewer, [curve(t) for t in curve.x])
                 add_path(viewer, path, color='red')
 
             if args.smooth:
