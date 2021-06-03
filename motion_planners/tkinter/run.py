@@ -102,18 +102,97 @@ def get_extend_fn(obstacles=[]):
 
 ##################################################
 
+def solve_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
+    solutions = np.roots([
+        a_max,
+        2 * v1,
+        (v1**2 - v2**2) / (2 * a_max) + (x1 - x2),
+    ])
+    solutions = [t for t in solutions if not isinstance(t, complex) and (t >= 0)]
+    #solutions = [t for t in solutions if t <= (v2 - v1) / a_max] # TODO: this constraint is strange
+    solutions = [t for t in solutions if abs(v1 + t*a_max) <= abs(v_max)]
+    if not solutions:
+        return None
+    t = min(solutions)
+    T = t + 2 * (v1 - v2) / a_max
+    return T
+
+def solve_three_ramp(x1, x2, v1, v2, v_max, a_max):
+    # http://motion.pratt.duke.edu/papers/icra10-smoothing.pdf
+    # https://github.com/Puttichai/parabint/blob/2662d4bf0fbd831cdefca48863b00d1ae087457a/parabint/optimization.py
+    # TODO: minimum-switch-time constraint
+    #assert np.positive(v_max).all() and np.positive(a_max).all()
+    # P+L+P-
+    tp1 = (v_max - v1) / a_max
+    tp2 = (v2 - v_max) / a_max
+    tl = (v2 ** 2 + v1 ** 2 - 2 * v_max ** 2) / (2 * v_max * a_max) + (x2 - x1) / v_max
+    ts = [tp1, tl, tp2]
+    if any(t < 0 for t in ts):
+        return None
+    T = sum(ts)
+    return T
+
+def solve_ramp(x1, x2, v1, v2, v_max, a_max):
+    assert all(abs(v) <= v_max for v in [v1, v2])
+    candidates = [
+        solve_two_ramp(x1, x2, v1, v2, a_max, v_max),
+        solve_two_ramp(x1, x2, v1, v2, -a_max, -v_max),
+        solve_three_ramp(x1, x2, v1, v2, v_max, a_max),
+        solve_three_ramp(x1, x2, v1, v2, -v_max, -a_max),
+    ]
+    return min(t for t in candidates if t is not None)
+
+def solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max):
+    d = len(x1)
+    return max(solve_ramp(x1[i], x2[i], v1[i], v2[i], v_max[i], a_max[i])
+               for i in range(d))
+
+##################################################
+
 def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | slinear | quadratic | cubic
     from scipy.interpolate import interp1d, CubicHermiteSpline, make_interp_spline, CubicSpline
     #from numpy import polyfit
     waypoints = remove_redundant(path)
     waypoints = waypoints_from_path(waypoints)
+
     print(len(path), len(waypoints))
     differences = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
     times = np.cumsum(differences) / velocity
-    curve = interp1d(times, waypoints, kind=kind, axis=0, **kwargs)
-    #curve = CubicSpline(times, waypoints)
+    print(times)
+    #positions_curve = interp1d(times, waypoints, kind=kind, axis=0, **kwargs)
+    #positions_curve = CubicSpline(times, waypoints, bc_type='clamped')
+    velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
+    positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
+    velocities_curve = positions_curve.derivative()
+    print([velocities_curve(t) for t in times])
 
-    return curve
+    # ts = [times[0], times[-1]]
+    # t1, t2 = positions_curve.x[0], positions_curve.x[-1]
+    t1, t2 = np.random.uniform(positions_curve.x[0], positions_curve.x[-1], 2)
+    if t1 > t2:
+        t1, t2 = t2, t1
+    ts = [t1, t2]
+
+
+
+    x1, x2 = [positions_curve(t) for t in ts]
+    v1, v2 = [velocities_curve(t) for t in ts]
+    d = len(x1)
+    v_max = 10.*np.ones(d)
+    a_max = v_max / 1.
+
+    print(x1, x2, v1, v2, v_max, a_max)
+    t = solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max)
+    assert t is not None
+    print(t)
+    input()
+    times = [ts[0], ts[-1] + t]
+    positions = [x1, x2]
+    velocities = [v1, v2]
+    positions_curve = CubicHermiteSpline(times, positions, dydx=velocities)
+
+    print(t)
+    return positions_curve
 
 def discretize_curve(positions_curve, time_step=1e-2):
     control_times = np.append(np.arange(
@@ -232,6 +311,7 @@ def main():
             print('Solutions ({}): {} | Time: {:.3f}'.format(len(paths), [(len(path), round(compute_path_cost(
                 path, distance_fn), 3)) for path in paths], elapsed_time(start_time)))
             for path in paths:
+                #path = path[:1] + path[-2:]
                 path = waypoints_from_path(path)
                 add_path(viewer, path, color='green')
                 curve = interpolate_path(path)
