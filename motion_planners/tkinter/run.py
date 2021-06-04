@@ -242,29 +242,32 @@ def solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max):
 
 def check_spline(spline, v_max=None, a_max=None):
     # TODO: start/stop times
+    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PPoly.html#scipy.interpolate.PPoly
     # polys = [np.poly1d([spline.c[c, 0, k] for c in range(spline.c.shape[0])]) # Decreasing order
     #         for k in range(spline.c.shape[-1])]
     # from numpy.polynomial.polynomial import Polynomial
     # polys = [Polynomial([spline.c[c, 0, k] for c in range(spline.c.shape[0])][-1])  # Increasing order
     #          for k in range(spline.c.shape[-1])]
+    signs = [+1, -1]
     for i in range(spline.c.shape[1]):
         t0, t1 = spline.x[i], spline.x[i+1]
-        local_times = [t0, t1]
+        t0, t1 = 0, (t1 - t0)
+        boundary_ts = [t0, t1]
         for k in range(spline.c.shape[-1]):
             position_poly = np.poly1d([spline.c[c, i, k] for c in range(spline.c.shape[0])])
             vel_poly = position_poly.deriv()
             if v_max is not None:
-                if any(abs(vel_poly(t)) > v_max[k] for t in local_times):
+                if any(abs(vel_poly(t)) > v_max[k] for t in boundary_ts):
                     return False
                 if any(not isinstance(r, complex) and (t0 <= r <= t1)
-                       for r in (vel_poly - np.poly1d([v_max[k]])).roots):
+                       for sign in signs for r in (vel_poly + sign*np.poly1d([v_max[k]])).roots):
                     return False
             accel_poly = vel_poly.deriv()
             if a_max is not None:
-                if any(abs(accel_poly(t)) > a_max[k] for t in local_times):
+                if any(abs(accel_poly(t)) > a_max[k] for t in boundary_ts):
                     return False
                 if any(not isinstance(r, complex) and (t0 <= r <= t1)
-                       for r in (accel_poly - np.poly1d([a_max[k]])).roots):
+                       for sign in signs for r in (accel_poly + sign*np.poly1d([a_max[k]])).roots):
                     return False
     return True
 
@@ -325,8 +328,8 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
         # new_velocities_curve = new_positions_curve.derivative()
         # print(v2, new_velocities_curve(new_t2))
 
-        if new_positions_curve.x[-1] >= positions_curve.x[-1]:
-            continue
+        # if new_positions_curve.x[-1] >= positions_curve.x[-1]:
+        #     continue
         _, samples = discretize_curve(new_positions_curve)
         #_, samples = discretize_curve(new_positions_curve, start_t=new_times[i1+1], end_t=new_times[-(len(times) - i2 + 1)])
         if not any(map(collision_fn, samples)):
@@ -401,7 +404,7 @@ def find_max_velocity(positions_curve, start_t=None, end_t=None, **kwargs):
     if end_t is None:
         end_t = positions_curve.x[-1]
     velocities_curve = positions_curve.derivative()
-    objective = lambda t: -np.linalg.norm(velocities_curve(t), ord=2)
+    objective = lambda t: -np.linalg.norm(velocities_curve(t), ord=INF) # 2 | INF
     #objective = lambda t: -np.linalg.norm(velocities_curve(t), ord=2)**2 # t[0]
     #accelerations_curve = positions_curve.derivative() # TODO: ValueError: failed in converting 7th argument `g' of _lbfgsb.setulb to C/Fortran array
     #grad = lambda t: np.array([-2*sum(accelerations_curve(t))])
@@ -424,7 +427,7 @@ def time_discretize_curve(positions_curve, start_t=None, end_t=None, time_step=1
     resolution = 5e-2
     time_step = resolution / max_v
     print('Max velocity: {:.3f} (at time {:.3f}) | Limit: {:.3f} | Step: {:.3f} | Duration: {:.3f}'.format(
-        max_v, max_t, np.linalg.norm(V_MAX), time_step, positions_curve.x[-1]))
+        max_v, max_t, np.linalg.norm(V_MAX, ord=INF), time_step, positions_curve.x[-1])) # 2 | INF
     #input()
 
     times = np.append(np.arange(start_t, end_t, step=time_step), [end_t])
@@ -501,6 +504,8 @@ def main():
                         help='When enabled, smooths paths.')
     parser.add_argument('-t', '--time', default=1., type=float,
                         help='The maximum runtime.')
+    parser.add_argument('--seed', default=None, type=int,
+                        help='The random seed to use.')
     args = parser.parse_args()
     print(args)
 
