@@ -267,8 +267,8 @@ def check_spline(spline, v_max=None, a_max=None, start=None, end=None):
             # print([position_poly(t) for t in boundary_ts])
             # print([spline(t)[k] for t in boundary_ts])
 
-            vel_poly = position_poly.deriv()
             if v_max is not None:
+                vel_poly = position_poly.deriv(m=1)
                 if any(abs(vel_poly(t)) > v_max[k] for t in boundary_ts):
                     return False
                 if any(not isinstance(r, complex) and (t0 <= r <= t1)
@@ -276,8 +276,9 @@ def check_spline(spline, v_max=None, a_max=None, start=None, end=None):
                     return False
             #a_max = None
 
-            accel_poly = vel_poly.deriv()
-            if a_max is not None:
+            # TODO: reorder to check endpoints first
+            if a_max is not None: # INF
+                accel_poly = position_poly.deriv(m=2)
                 #print([(accel_poly(t), a_max[k]) for t in boundary_ts])
                 if any(abs(accel_poly(t)) > a_max[k] for t in boundary_ts):
                     return False
@@ -288,12 +289,15 @@ def check_spline(spline, v_max=None, a_max=None, start=None, end=None):
                     return False
     return True
 
-def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, num=100):
+def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, num=100, max_time=INF):
+    start_time = time.time()
     if not check_spline(start_positions_curve, v_max, a_max):
         return None
-    from scipy.interpolate import CubicHermiteSpline
+    from scipy.interpolate import CubicHermiteSpline, CubicSpline
     positions_curve = start_positions_curve
     for iteration in range(num):
+        if elapsed_time(start_time) >= max_time:
+            break
         times = positions_curve.x
         durations = [0.] + [t2 - t1 for t1, t2 in get_pairs(times)]
         positions = [positions_curve(t) for t in times]
@@ -306,7 +310,8 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
         if t1 > t2:
             t1, t2 = t2, t1
         max_t = t2 - t1
-        min_t = 0
+        min_t = 0 # TODO: lower bound
+        # TODO: limit the duration between these two points
 
         ts = [t1, t2]
         i1 = find(lambda i: times[i] <= t1, reversed(range(len(times))))
@@ -325,8 +330,8 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
         # best_t = solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max)
         # if best_t is None:
         #     continue
-        #assert t is not None
-        #print(t, t2 - t1)
+        #assert best_t is not None
+        #print(best_t, t2 - t1)
 
         # current_t = t2 - t1
         # best_t = np.max(np.divide(np.absolute(x2 - x1), v_max))
@@ -334,7 +339,7 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
         # best_t = np.random.uniform(best_t, current_t)
 
         # spline = CubicHermiteSpline([0, best_t], [x1, x2], dydx=[v1, v2])
-        # if check_spline(spline, v_max, a_max):
+        # if not check_spline(spline, v_max, a_max):
         #     continue
 
         # positions = [positions_curve(t) for t in times]
@@ -347,8 +352,11 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
         #new_times = [ts[0], ts[-1] + t]
 
         # TODO: splice in the new segment
-        new_positions_curve = CubicHermiteSpline(new_times, new_positions, dydx=new_velocities)
+        #new_positions_curve = CubicHermiteSpline(new_times, new_positions, dydx=new_velocities)
+        new_positions_curve = CubicSpline(new_times, new_positions)
         print(iteration, new_positions_curve.x[-1], positions_curve.x[-1])
+        if new_positions_curve.x[-1] >= positions_curve.x[-1]:
+            continue
 
         #new_t1 = new_times[i1+1]
         #new_t2 = new_times[i1+2]
@@ -356,8 +364,7 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
         # new_velocities_curve = new_positions_curve.derivative()
         # print(v2, new_velocities_curve(new_t2))
 
-        # if new_positions_curve.x[-1] >= positions_curve.x[-1]:
-        #     continue
+
         if not check_spline(new_positions_curve, v_max, a_max):
             continue
 
@@ -494,13 +501,14 @@ def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocit
     #velocities_curve = positions_curve.derivative()
     positions = [positions_curve(t) for t in times]
 
-    # new_times = []
-    # new_positions = []
-    # for t in times:
-    #     position = positions_curve(t)
-    #     if not new_positions or (get_distance(new_positions[-1], position) >= resolution): # TODO: add first before exceeding
-    #         new_times.append(t)
-    #         new_positions.append(position)
+    new_times = []
+    new_positions = []
+    for t in times:
+        position = positions_curve(t)
+        if not new_positions or (get_distance(new_positions[-1], position) >= resolution): # TODO: add first before exceeding
+            new_times.append(t)
+            new_positions.append(position)
+    times, positions = new_times, new_positions
 
     return times, positions
 
@@ -515,7 +523,7 @@ def derivative_discretize_curve(positions_curve, start_t=None, end_t=None, resol
         end_t = positions_curve.x[-1]
     assert start_t < end_t
     velocities_curve = positions_curve.derivative()
-    acceleration_curve = velocities_curve.derivative()
+    #acceleration_curve = velocities_curve.derivative()
     times = [start_t]
     while True:
         velocities = velocities_curve(times[-1])
@@ -539,6 +547,7 @@ def integral_discretize_curve(positions_curve, start_t=None, end_t=None, resolut
     assert start_t < end_t
     distance_curve = positions_curve.antiderivative()
     #distance = positions_curve.integrate(a, b)
+    # TODO: compute a total distance curve
     raise NotImplementedError()
 
 ##################################################
