@@ -163,6 +163,11 @@ def solve_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
         return None
     return T
 
+    #from numpy.linalg import solve
+    # from scipy.optimize import linprog
+    # result = linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None, bounds=None,
+    #                  method='interior-point', callback=None, options=None, x0=None)
+
     sigma = +1 if a_max >= 0 else -1
     solutions = np.roots([
         T**2,
@@ -235,7 +240,35 @@ def solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max):
 
 ##################################################
 
-def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, num=100):
+def check_spline(spline, v_max=None, a_max=None):
+    # TODO: start/stop times
+    # polys = [np.poly1d([spline.c[c, 0, k] for c in range(spline.c.shape[0])]) # Decreasing order
+    #         for k in range(spline.c.shape[-1])]
+    # from numpy.polynomial.polynomial import Polynomial
+    # polys = [Polynomial([spline.c[c, 0, k] for c in range(spline.c.shape[0])][-1])  # Increasing order
+    #          for k in range(spline.c.shape[-1])]
+    for i in range(spline.c.shape[1]):
+        t0, t1 = spline.x[i], spline.x[i+1]
+        local_times = [t0, t1]
+        for k in range(spline.c.shape[-1]):
+            position_poly = np.poly1d([spline.c[c, i, k] for c in range(spline.c.shape[0])])
+            vel_poly = position_poly.deriv()
+            if v_max is not None:
+                if any(abs(vel_poly(t)) > v_max[k] for t in local_times):
+                    return False
+                if any(not isinstance(r, complex) and (t0 <= r <= t1)
+                       for r in (vel_poly - np.poly1d([v_max[k]])).roots):
+                    return False
+            accel_poly = vel_poly.deriv()
+            if a_max is not None:
+                if any(abs(accel_poly(t)) > a_max[k] for t in local_times):
+                    return False
+                if any(not isinstance(r, complex) and (t0 <= r <= t1)
+                       for r in (accel_poly - np.poly1d([a_max[k]])).roots):
+                    return False
+    return True
+
+def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, num=25):
     from scipy.interpolate import CubicHermiteSpline
     positions_curve = start_positions_curve
     for iteration in range(num):
@@ -269,6 +302,10 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
         #assert t is not None
         #print(t, t2 - t1)
 
+        spline = CubicHermiteSpline([0, min_t], [x1, x2], dydx=[v1, v2])
+        if check_spline(spline, v_max, a_max):
+            continue
+
         # positions = [positions_curve(t) for t in times]
         # velocities = [velocities_curve(t) for t in times]
         new_durations = np.concatenate([
@@ -276,18 +313,22 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
         assert len(new_durations) == (i1 + 1) + (len(durations) - i2) + 2
         print(new_durations)
         new_times = np.cumsum(new_durations)
-
-        print(new_times)
         #new_times = [ts[0], ts[-1] + t]
-
 
         # TODO: splice in the new segment
         new_positions_curve = CubicHermiteSpline(new_times, new_positions, dydx=new_velocities)
         print(iteration, new_positions_curve.x[-1], positions_curve.x[-1])
+
+        new_t1 = new_times[i1+1]
+        #new_t2 = new_times[i1+2]
+        new_t2 = new_times[-(len(times) - i2 + 1)]
+        # new_velocities_curve = new_positions_curve.derivative()
+        # print(v2, new_velocities_curve(new_t2))
+
         if new_positions_curve.x[-1] >= positions_curve.x[-1]:
             continue
         _, samples = discretize_curve(new_positions_curve)
-        #_, samples = discretize_curve(new_positions_curve, start_t=new_times[i1+1], end_t=new_times[-(len(times) - i2 - 1)])
+        #_, samples = discretize_curve(new_positions_curve, start_t=new_times[i1+1], end_t=new_times[-(len(times) - i2 + 1)])
         if not any(map(collision_fn, samples)):
             positions_curve = new_positions_curve
     print(start_positions_curve.x[-1], positions_curve.x[-1])
@@ -337,7 +378,8 @@ def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | sli
     positions_curve = smooth(positions_curve, v_max, a_max)
     return positions_curve
 
-def optimize(objective, lower, upper, num=10, max_time=INF, **kwargs):
+def optimize(objective, lower, upper, num=10, max_time=INF, verbose=False, **kwargs):
+    # https://www.cvxpy.org/examples/basic/socp.html
     from scipy.optimize import minimize #, line_search, brute, basinhopping, minimize_scalar
     start_time = time.time()
     best_t, best_f = None, INF
@@ -349,11 +391,11 @@ def optimize(objective, lower, upper, num=10, max_time=INF, **kwargs):
         result = minimize(objective, x0=x0, bounds=bounds, **kwargs) # method=None, jac=None,
         if result.fun < best_f:
             best_t, best_f = result.x, result.fun
-        #print(iteration, t0, result.x, result.fun) # objective(result.x)
+            if verbose:
+                print(iteration, x0, result.x, result.fun) # objective(result.x)
     return best_t, best_f
 
-def find_max_velocity(positions_curve, start_t=None, end_t=None, num=10):
-    from scipy.optimize import minimize_scalar, minimize #, line_search, brute, basinhopping
+def find_max_velocity(positions_curve, start_t=None, end_t=None, **kwargs):
     if start_t is None:
         start_t = positions_curve.x[0]
     if end_t is None:
@@ -365,7 +407,8 @@ def find_max_velocity(positions_curve, start_t=None, end_t=None, num=10):
     #grad = lambda t: np.array([-2*sum(accelerations_curve(t))])
     #result = minimize_scalar(objective, method='bounded', bounds=(start_t, end_t)) #, options={'disp': False})
 
-    best_t, best_f = optimize(objective, lower=[start_t], upper=[end_t], num=10, max_time=INF)
+    #print(max(-objective(t) for t in velocities_curve.x))
+    best_t, best_f = optimize(objective, lower=[start_t], upper=[end_t], **kwargs)
     best_t, best_f = best_t[0], -best_f
     return best_t, best_f
 
@@ -375,14 +418,27 @@ def time_discretize_curve(positions_curve, start_t=None, end_t=None, time_step=1
     if end_t is None:
         end_t = positions_curve.x[-1]
     assert start_t < end_t
+
+    max_t, max_v = find_max_velocity(positions_curve, start_t=start_t, end_t=end_t, num=100)
+    #max_t, max_v = INF, np.linalg.norm(V_MAX)
+    resolution = 5e-2
+    time_step = resolution / max_v
+    print('Max velocity: {:.3f} (at time {:.3f}) | Limit: {:.3f} | Step: {:.3f} | Duration: {:.3f}'.format(
+        max_v, max_t, np.linalg.norm(V_MAX), time_step, positions_curve.x[-1]))
+    #input()
+
     times = np.append(np.arange(start_t, end_t, step=time_step), [end_t])
     #times = positions_curve.x
     #velocities_curve = positions_curve.derivative()
     positions = [positions_curve(t) for t in times]
 
-    max_t, max_v = find_max_velocity(positions_curve, start_t=start_t, end_t=end_t)
-    print('Max velocity: {:.3f} (at time {:.3f})'.format(max_v, max_t))
-    input()
+    # new_times = []
+    # new_positions = []
+    # for t in times:
+    #     position = positions_curve(t)
+    #     if not new_positions or (get_distance(new_positions[-1], position) >= resolution): # TODO: add first before exceeding
+    #         new_times.append(t)
+    #         new_positions.append(position)
 
     return times, positions
 
