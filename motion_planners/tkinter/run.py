@@ -113,7 +113,40 @@ def get_distance_fn(weights):
 
 ##################################################
 
+def optimize_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
+    from scipy.optimize import Bounds, LinearConstraint, NonlinearConstraint, minimize
+
+    a_max = abs(a_max)
+    v_max = abs(v_max)
+    d = x2 - x1
+    def objective(args):
+        t1, t2, vp = args
+        return t1 + t2
+    def equality(args):
+        t1, t2, vp = args
+        return t1*(v1 + vp) / 2. + t2*(vp + v2) / 2.
+    constraints = [
+        # TODO: sample value and then optimize
+        LinearConstraint(A=[-a_max, 0, 1], lb=-np.inf, ub=v1, keep_feasible=False),
+        LinearConstraint(A=[+a_max, 0, 1], lb=v1, ub=+np.inf, keep_feasible=False),
+        LinearConstraint(A=[0, -a_max, 1], lb=-np.inf, ub=v2, keep_feasible=False),
+        LinearConstraint(A=[0, +a_max, 1], lb=v2, ub=+np.inf, keep_feasible=False),
+        NonlinearConstraint(fun=equality, lb=d-1e-2, ub=d+1e-2, keep_feasible=False),
+    ]
+    bounds = [
+        # TODO: time bound based on moving to a stop
+        (0, np.inf),
+        (0, np.inf),
+        (-v_max, +v_max),
+    ]
+    guess = np.zeros(3)
+    result = minimize(objective, x0=guess, bounds=bounds, constraints=constraints)
+    print(result)
+    input()
+
 def solve_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
+    #optimize_two_ramp(x1, x2, v1, v2, a_max)
+
     solutions = np.roots([
         a_max,
         2 * v1,
@@ -130,6 +163,25 @@ def solve_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
         return None
     return T
 
+    sigma = +1 if a_max >= 0 else -1
+    solutions = np.roots([
+        T**2,
+        sigma*(2*T*(v1 + v2) + 4*(x1 - x2)),
+        -(v2 - v1)**2,
+    ])
+    a = solutions[0]
+    t1 = (T + (v2 - v1)/a)/2
+    t2 = T - t1
+    vp = v1 + a * t1
+
+    print(solutions, a, t1, t2)
+    print(x1 + v1*t1 + 0.5*a*t1**2, # + vp*t2 - 0.5*a*t2**2,
+          x2 - v2*t2 - 0.5*a*t2**2)
+    print(v1 + a*t1,
+          v2 + a*t2)
+    input()
+    return T
+
 def solve_three_ramp(x1, x2, v1, v2, v_max, a_max):
     # http://motion.pratt.duke.edu/papers/icra10-smoothing.pdf
     # https://github.com/Puttichai/parabint/blob/2662d4bf0fbd831cdefca48863b00d1ae087457a/parabint/optimization.py
@@ -143,6 +195,15 @@ def solve_three_ramp(x1, x2, v1, v2, v_max, a_max):
     if any(t < 0 for t in ts):
         return None
     T = sum(ts)
+    return T
+
+    print(tp1, tp2, tl)
+    a = (v_max**2 - abs(v_max)*(v1 + v2) + (v1**2 + v2**2)/2) / (T*abs(v_max) - (x2 - x1))
+    tp1 = (v_max - v1) / a
+    tp2 = (v2 - v_max) / a
+    tl = (v2 ** 2 + v1 ** 2 - 2 * abs(v_max) ** 2) / (2 * v_max * a) + (x2 - x1) / v_max
+    print(tp1, tp2, tl)
+    input()
     return T
 
 def solve_ramp(x1, x2, v1, v2, v_max, a_max):
@@ -217,8 +278,6 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
         new_times = np.cumsum(new_durations)
 
         print(new_times)
-
-
         #new_times = [ts[0], ts[-1] + t]
 
 
@@ -253,7 +312,7 @@ def retime_path(path, velocity=1., **kwargs):
     d = len(path[0])
     v_max = 5.*np.ones(d)
     a_max = v_max / 1.
-    #positions_curve = smooth(positions_curve, v_max, a_max, **kwargs)
+    positions_curve = smooth(positions_curve, v_max, a_max, **kwargs)
     return positions_curve
 
 def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | slinear | quadratic | cubic
@@ -278,8 +337,23 @@ def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | sli
     positions_curve = smooth(positions_curve, v_max, a_max)
     return positions_curve
 
+def optimize(objective, lower, upper, num=10, max_time=INF, **kwargs):
+    from scipy.optimize import minimize #, line_search, brute, basinhopping, minimize_scalar
+    start_time = time.time()
+    best_t, best_f = None, INF
+    bounds = list(zip(lower, upper))
+    for iteration in range(num):
+        if elapsed_time(start_time) >= max_time:
+            break
+        x0 = np.random.uniform(lower, upper)
+        result = minimize(objective, x0=x0, bounds=bounds, **kwargs) # method=None, jac=None,
+        if result.fun < best_f:
+            best_t, best_f = result.x, result.fun
+        #print(iteration, t0, result.x, result.fun) # objective(result.x)
+    return best_t, best_f
+
 def find_max_velocity(positions_curve, start_t=None, end_t=None, num=10):
-    from scipy.optimize import minimize_scalar, minimize #, line_search, brute
+    from scipy.optimize import minimize_scalar, minimize #, line_search, brute, basinhopping
     if start_t is None:
         start_t = positions_curve.x[0]
     if end_t is None:
@@ -290,14 +364,10 @@ def find_max_velocity(positions_curve, start_t=None, end_t=None, num=10):
     #accelerations_curve = positions_curve.derivative() # TODO: ValueError: failed in converting 7th argument `g' of _lbfgsb.setulb to C/Fortran array
     #grad = lambda t: np.array([-2*sum(accelerations_curve(t))])
     #result = minimize_scalar(objective, method='bounded', bounds=(start_t, end_t)) #, options={'disp': False})
-    best_t, best_f = None, INF
-    for iteration in range(num):
-        t0 = random.uniform(start_t, end_t)
-        result = minimize(objective, x0=[t0], method=None, jac=None, bounds=[(start_t, end_t)])
-        if result.fun < best_f:
-            best_t, best_f = result.x[0], result.fun
-        #print(iteration, t0, result.x, result.fun) # objective(result.x)
-    return best_t, -best_f
+
+    best_t, best_f = optimize(objective, lower=[start_t], upper=[end_t], num=10, max_time=INF)
+    best_t, best_f = best_t[0], -best_f
+    return best_t, best_f
 
 def time_discretize_curve(positions_curve, start_t=None, end_t=None, time_step=1e-2):
     if start_t is None:
