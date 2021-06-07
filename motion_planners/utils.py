@@ -136,6 +136,14 @@ def find(test, sequence):
             return item
     raise RuntimeError()
 
+
+def sign(x):
+    if x > 0:
+        return +1
+    if x < 0:
+        return -1
+    return x
+
 ##################################################
 
 def get_delta(q1, q2):
