@@ -151,33 +151,99 @@ def filter_times(times):
         return None
     return min(valid_times)
 
+def iterate_poly1d(poly1d):
+    return enumerate(reversed(list(poly1d)))
+
+def poly_sum(p0, *polys):
+    p_total = np.poly1d(p0)
+    for p in polys:
+        p_total = np.poly1d(np.polyadd(p_total, p))
+    return p_total
+
+def poly_prod(p0, *polys):
+    p_total = np.poly1d(p0)
+    for p in polys:
+        p_total = np.poly1d(np.polymul(p_total, p))
+    return p_total
+
+def curve_from_controls(durations, accels, t0=0., x0=0., v0=0):
+    assert len(durations) == len(accels)
+    #from numpy.polynomial import Polynomial
+    #t = Polynomial.identity()
+    times = [t0]
+    positions = [x0]
+    velocities = [v0]
+    coeffs = []
+    for duration, accel in zip(durations, accels):
+        assert duration >= 0.
+        coeff = [0.5*accel, 1.*velocities[-1], positions[-1]]
+        coeffs.append(coeff)
+        times.append(times[-1] + duration)
+        p_curve = np.poly1d(coeff) # Not centered
+        positions.append(p_curve(duration))
+        v_curve = p_curve.deriv() # Not centered
+        velocities.append(v_curve(duration))
+    # print(positions)
+    # print(velocities)
+
+    #np.piecewise
+    # max_order = max(p_curve.order for p_curve in p_curves)
+    # coeffs = np.zeros([max_order + 1, len(p_curves), 1])
+    # for i, p_curve in enumerate(p_curves):
+    #     # TODO: need to center
+    #     for k, c in iterate_poly1d(p_curve):
+    #         coeffs[max_order - k, i] = c
+    from scipy.interpolate import PPoly
+    # TODO: check continuity
+    return PPoly(c=np.array(coeffs).T, x=times) # TODO: spline.extend
+
 def min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=INF):
     # from numpy.linalg import solve
     # from scipy.optimize import linprog
     # result = linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None, bounds=None,
     #                  method='interior-point', callback=None, options=None, x0=None)
 
-    sigma = +1 if a_max >= 0 else -1
-    solutions = np.roots([
-        T ** 2,
-        sigma * (2 * T * (v1 + v2) + 4 * (x1 - x2)),
-        -(v2 - v1) ** 2,
+    print()
+    print(x1, x2, v1, v2, T, a_max)
+    sign = +1 if a_max >= 0 else -1
+    eqn = np.poly1d([
+        T ** 2, # a**2
+        sign * (2 * T * (v1 + v2) + 4 * (x1 - x2)), # a
+        -(v2 - v1) ** 2, # 1
     ])
-    a = solutions[0]
-    t1 = (T + (v2 - v1) / a) / 2
-    t2 = T - t1
-    vp = v1 + a * t1
+    candidates = []
+    for a in np.roots(eqn): # eqn.roots
+        if isinstance(a, complex) or (a == 0):
+            continue
+        ts = (T + (v2 - v1) / a) / 2.
+        if not (0 <= ts <= T):
+            continue
+        vs = v1 + a * ts
+        if abs(vs) > abs(v_max):
+            continue
+        candidates.append(a)
+    if not candidates:
+        return None
 
-    print(solutions, a, t1, t2)
-    print(x1 + v1 * t1 + 0.5 * a * t1 ** 2,  # + vp*t2 - 0.5*a*t2**2,
-          x2 - v2 * t2 - 0.5 * a * t2 ** 2)
-    print(v1 + a * t1,
-          v2 + a * t2)
-    input()
+    a = min(candidates)
+    ts = (T + (v2 - v1) / a) / 2.
+    durations = [ts, T - ts]
+    accels = [sign*a, -sign*a]
+    p_curve = curve_from_controls(durations, accels, t0=0., x0=x1, v0=v1)
+    end_times = np.append(p_curve.x[:1], p_curve.x[-1:])
+    v_curve = p_curve.derivative()
+
+    print([0., T], end_times)
+    print([x1, x2], [float(p_curve(t)) for t in end_times])
+    print([v1, v2], [float(v_curve(t)) for t in end_times])
+    assert np.allclose([0., T], end_times)
+    assert np.allclose([x1, x2], [float(p_curve(t)) for t in end_times])
+    assert np.allclose([v1, v2], [float(v_curve(t)) for t in end_times])
+    return p_curve
+
 
 def solve_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
     #optimize_two_ramp(x1, x2, v1, v2, a_max)
-
     solutions = np.roots([
         a_max,
         2 * v1,
@@ -192,8 +258,8 @@ def solve_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
     T = t + 2 * (v1 - v2) / a_max
     if T < 0:
         return None
+    min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=v_max)
     return T
-    #min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=INF)
 
 def min_three_ramp(x1, x2, v1, v2, v_max, a_max, T):
     #print(tp1, tp2, tl)
@@ -471,9 +537,9 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
 
     waypoints = remove_redundant(path)
     waypoints = waypoints_from_path(waypoints)
-    differences = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
-    # differences = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
-    #                      for x1, x2 in get_pairs(waypoints)]
+    #differences = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
+    differences = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
+                         for x1, x2 in get_pairs(waypoints)]
     # differences = [0.] + [multivariate_conservative(x1, x2, v_max, a_max)
     #                       for x1, x2 in get_pairs(waypoints)]
     times = np.cumsum(differences)
