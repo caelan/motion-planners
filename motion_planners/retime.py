@@ -77,7 +77,7 @@ def curve_from_controls(durations, accels, t0=0., x0=0., v0=0.):
     coeffs = []
     for duration, accel in zip(durations, accels):
         assert duration >= 0.
-        coeff = [0.5*accel, 1.*velocities[-1], positions[-1]]
+        coeff = [0.5*accel, 1.*velocities[-1], positions[-1]] # 0. jerk
         coeffs.append(coeff)
         times.append(times[-1] + duration)
         p_curve = np.poly1d(coeff) # Not centered

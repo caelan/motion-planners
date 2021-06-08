@@ -6,7 +6,7 @@ import time
 import random
 import sys
 
-from ..parabolic import solve_multi_poly,  opt_straight_line
+from ..parabolic import solve_multi_poly,  opt_straight_line, solve_multivariate_ramp
 from ..retime import spline_duration
 from .discretize import time_discretize_curve, V_MAX, A_MAX
 from .limits import get_max_velocity
@@ -38,7 +38,7 @@ ALGORITHMS = [
 ##################################################
 
 def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
-    from scipy.interpolate import CubicSpline
+    from scipy.interpolate import CubicSpline, CubicHermiteSpline
     d = len(path[0])
     # v_max = 5.*np.ones(d)
     # a_max = v_max / 1.
@@ -47,10 +47,13 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     waypoints = remove_redundant(path)
     waypoints = waypoints_from_path(waypoints)
     #durations = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
+
+    durations = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
+                        for x1, x2 in get_pairs(waypoints)]
+    print(sum(durations))
     durations = [0.] + [max(spline_duration(opt_straight_line(x1[k], x2[k], v_max=v_max[k], a_max=a_max[k])) for k in range(d))
-                        for x1, x2 in get_pairs(waypoints)] # min_linear_spline | opt_straight_line
-    #durations = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
-    #                     for x1, x2 in get_pairs(waypoints)]
+                       for x1, x2 in get_pairs(waypoints)] # min_linear_spline | opt_straight_line
+    print(sum(durations))
 
     durations += 1e-3*np.ones(len(durations))
     # min_t = 1e-2
@@ -64,7 +67,10 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
 
     positions_curve = solve_multi_poly(times, waypoints, velocities, v_max, a_max)
     #positions_curve = positions_curve.spline()
-    #positions_curve = positions_curve.hermite_spline()
+    positions_curve = positions_curve.hermite_spline()
+    print(positions_curve.c[0, ...])
+    print(positions_curve.c.shape)
+    return
 
     positions_curve = smooth_curve(positions_curve,
                                    #v_max=None, a_max=None,

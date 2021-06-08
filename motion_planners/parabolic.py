@@ -164,21 +164,17 @@ def quickest_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
         2 * v1, # t
         (v1**2 - v2**2) / (2 * a_max) + (x1 - x2), # 1
     ])
-    print()
-    print(x1, x2, v1, v2, a_max, v_max)
     solutions = [t for t in solutions if check_time(t)]
-    print(solutions)
-    solutions = [t for t in solutions if 0 <= t <= abs(v2 - v1) / abs(a_max)] # TODO: this constraint is strange
-    print(solutions)
-    solutions = [t for t in solutions if abs(v1 + t*a_max) <= abs(v_max)]
-    print(solutions)
+    #solutions = [t for t in solutions if t <= abs(v2 - v1) / abs(a_max)] # TODO: omitting this constraint from Hauser (abs(v2 - v1) might be 0)
+    solutions = [t for t in solutions if t <= abs(v_max) / abs(a_max)] # Maybe this is what Hauser meant?
+    solutions = [t for t in solutions if abs(v1 + t*a_max) <= abs(v_max) + EPSILON] # TODO: check v2
     if not solutions:
         return None
     t = min(solutions)
-    T = t + 2 * (v1 - v2) / a_max
+    T = 2*t + (v1 - v2) / a_max
     if T < 0:
         return None
-    min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=v_max)
+    #min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=v_max)
     return T
 
 ##################################################
@@ -194,8 +190,8 @@ def solve_three_stage(x1, x2, v1, v2, v_max, a):
 def min_three_stage(x1, x2, v1, v2, T, v_max, a_max=INF):
     #assert abs(v_max) < INF
     a = (v_max**2 - v_max*(v1 + v2) + (v1**2 + v2**2)/2) \
-        / (T*abs(v_max) - (x2 - x1))
-    if abs(a) > abs(a_max) + EPSILON:
+        / (T*v_max - (x2 - x1))
+    if np.isnan(a) or (abs(a) > abs(a_max) + EPSILON) or (a == 0):
         return None
     durations = solve_three_stage(x1, x2, v1, v2, v_max, a)
     if any(t <= 0 for t in durations): # TODO: check T
@@ -227,8 +223,7 @@ def min_stage(x1, x2, v1, v2, T, v_max=INF, a_max=INF):
     #         zero_two_ramp(x1, x2, T, v_max=v_max, a_max=a_max),
     #         zero_three_stage(x1, x2, T, v_max=v_max, a_max=a_max),
     #     ]
-    #else:
-    # TODO: why does this fail when (v1 == 0) and (v2 == 0)
+    #     print(candidates)
     candidates = [
         min_two_ramp(x1, x2, v1, v2, T, a_max=a_max, v_max=v_max),
         min_two_ramp(x1, x2, v1, v2, T, a_max=-a_max, v_max=-v_max),
@@ -272,7 +267,7 @@ def solve_multi_poly(times, positions, velocities, v_max, a_max, **kwargs):
 def quickest_stage(x1, x2, v1, v2, v_max=INF, a_max=INF, min_t=0.):
     # TODO: handle infinite acceleration
     assert (v_max >= 0.) and (a_max >= 0.)
-    assert all(abs(v) <= v_max for v in [v1, v2])
+    assert all(abs(v) <= v_max + EPSILON for v in [v1, v2])
     if (v_max == INF) and (a_max == INF):
         T = 0
         return min(min_t, T) # TODO: throw an error
@@ -281,32 +276,27 @@ def quickest_stage(x1, x2, v1, v2, v_max=INF, a_max=INF, min_t=0.):
         return min(min_t, T)
 
     # if (v1 == 0.) and (v2 == 0.):
-    #     raise NotImplementedError()
+    #     candidates = [opt_straight_line(x1, x2, v_max=v_max, a_max=a_max).x]
+
     candidates = [
         quickest_two_ramp(x1, x2, v1, v2, a_max, v_max=v_max),
         quickest_two_ramp(x1, x2, v1, v2, -a_max, v_max=-v_max),
     ]
-    if v_max != INF:
-        candidates.extend([
-            quickest_three_stage(x1, x2, v1, v2, v_max, a_max),
-            quickest_three_stage(x1, x2, v1, v2, -v_max, -a_max),
-        ])
+    #if v_max != INF:
+    candidates.extend([
+        quickest_three_stage(x1, x2, v1, v2, v_max, a_max),
+        quickest_three_stage(x1, x2, v1, v2, -v_max, -a_max),
+    ])
     candidates = [t for t in candidates if t is not None]
-    #assert candidates
     if not candidates:
         return None
     T = min(t for t in candidates)
-    return min(min_t, T)
+    return max(min_t, T)
 
 def solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max):
     d = len(x1)
     durations = [quickest_stage(x1[i], x2[i], v1[i], v2[i], v_max[i], a_max[i]) for i in range(d)]
-    # if any(t is None for t in durations):
-    #     return None
-    durations = [t for t in durations if t is not None]
-    print(durations)
-    input()
-    if not durations:
+    if any(duration is None for duration in durations):
         return None
     return max(durations)
 
