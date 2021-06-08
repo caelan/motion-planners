@@ -3,7 +3,8 @@ import math
 import numpy as np
 
 from motion_planners.retime import curve_from_controls, parabolic_val, check_time, spline_duration, append_polys, \
-    MultiPPoly
+    MultiPPoly, filter_times
+from motion_planners.tkinter.limits import maximize_curve
 from motion_planners.utils import INF, get_sign, strictly_increasing, get_pairs
 
 def check_curve(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
@@ -29,19 +30,31 @@ def check_curve(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
 
 ##################################################
 
-def zero_two_ramp(x1, x2, T, a_max):
+def acceleration_cost(p_curve, **kwargs):
+    # TODO: minimize max acceleration
+    # TODO: minimize sum of squared
+    # TODO: minimize absolute value
+    # total_accel = p_curve.integrate(p_curve.x[0], p_curve.x[-1]) # TODO: square or abs
+    a_curve = p_curve.derivative(nu=2)
+    max_t, max_a = maximize_curve(a_curve, **kwargs)
+    return max_a
+
+def zero_two_ramp(x1, x2, T, v_max=INF, a_max=INF):
     sign = get_sign(x2 - x1)
     d = abs(x2 - x1)
     t_accel = T / 2.
     a = d / t_accel ** 2 # Lower accel
+    if a > a_max + 1e-6:
+        return None
+    if a*t_accel > v_max:
+        return None
     a = min(a, a_max) # Numerical error
     durations = [t_accel, t_accel]
     accels = [sign * a, -sign * a]
     p_curve = curve_from_controls(durations, accels, x0=x1)
-    # total_accel = p_curve.integrate(p_curve.x[0], p_curve.x[-1])
     return p_curve
 
-def zero_three_stage(x1, x2, T, a_max=INF):
+def zero_three_stage(x1, x2, T, v_max=INF, a_max=INF):
     sign = get_sign(x2 - x1)
     d = abs(x2 - x1)
     solutions = np.roots([
@@ -49,7 +62,13 @@ def zero_three_stage(x1, x2, T, a_max=INF):
         -a_max*T,
         d,
     ])
-    t1 = t3 = min(t for t in solutions if (T - 2*t) >= 0)
+    solutions = filter(check_time, solutions)
+    solutions = [t for t in solutions if (T - 2*t) >= 0]
+    if not solutions:
+        return None
+    t1 = t3 = min(solutions)
+    if t1*a_max > v_max:
+        return None
     t2 = T - t1 - t3 # Lower velocity
     durations = [t1, t2, t3]
     accels = [sign * a_max, 0., -sign * a_max]
@@ -74,7 +93,7 @@ def opt_straight_line(x1, x2, T_min=0., v_max=INF, a_max=INF):
         #a = a_max
         assert T_min <= T
         T = max(T_min, T)
-        p_curve = zero_two_ramp(x1, x2, T, a_max)
+        p_curve = zero_two_ramp(x1, x2, T, v_max, a_max)
         check_curve(p_curve, x1, x2, v1=0., v2=0., T=T, v_max=v_max, a_max=a_max)
         return p_curve
 
@@ -84,7 +103,7 @@ def opt_straight_line(x1, x2, T_min=0., v_max=INF, a_max=INF):
 
     assert T_min <= T
     T = max(T_min, T)
-    p_curve = zero_three_stage(x1, x2, T, a_max=a_max)
+    p_curve = zero_three_stage(x1, x2, T, v_max=v_max, a_max=a_max)
     check_curve(p_curve, x1, x2, v1=0., v2=0., T=T, v_max=v_max, a_max=a_max)
     return p_curve
 
@@ -202,24 +221,26 @@ def quickest_three_stage(x1, x2, v1, v2, v_max, a_max):
 ##################################################
 
 def min_stage(x1, x2, v1, v2, T, v_max=INF, a_max=INF):
-    if (v1 == 0) and (v2 == 0):
-        spline = opt_straight_line(x1, x2, v_max=v_max, a_max=a_max)
-        print(spline.x[-1], T)
-
-
-    candidates = [
-        min_two_ramp(x1, x2, v1, v2, T, a_max=a_max, v_max=v_max),
-        min_two_ramp(x1, x2, v1, v2, T, a_max=-a_max, v_max=-v_max),
-    ]
-    #if v_max != INF:
-    candidates.extend([
-        min_three_stage(x1, x2, v1, v2, T, v_max, a_max),
-        min_three_stage(x1, x2, v1, v2, T, -v_max, -a_max),
-    ])
+    if (v1 == 0.) and (v2 == 0.):
+        candidates = [
+            zero_two_ramp(x1, x2, T, v_max=v_max, a_max=a_max),
+            zero_three_stage(x1, x2, T, v_max=v_max, a_max=a_max),
+        ]
+    else:
+        # TODO: why does this fail when (v1 == 0) and (v2 == 0)
+        candidates = [
+            min_two_ramp(x1, x2, v1, v2, T, a_max=a_max, v_max=v_max),
+            min_two_ramp(x1, x2, v1, v2, T, a_max=-a_max, v_max=-v_max),
+        ]
+        #if v_max != INF:
+        candidates.extend([
+            min_three_stage(x1, x2, v1, v2, T, v_max, a_max),
+            min_three_stage(x1, x2, v1, v2, T, -v_max, -a_max),
+        ])
     candidates = [t for t in candidates if t is not None]
     if not candidates:
         return None
-    return min(candidates, key=spline_duration)
+    return min(candidates, key=lambda c: (spline_duration(c), acceleration_cost(c)))
 
 def min_spline(times, positions, velocities, **kwargs):
     assert len(times) == len(positions) == len(velocities)
@@ -258,6 +279,8 @@ def quickest_stage(x1, x2, v1, v2, v_max=INF, a_max=INF, min_t=0.):
         T = quickest_inf_accel(x1, x2, v_max=v_max)
         return min(min_t, T)
 
+    # if (v1 == 0.) and (v2 == 0.):
+    #     raise NotImplementedError()
     candidates = [
         quickest_two_ramp(x1, x2, v1, v2, a_max, v_max=v_max),
         quickest_two_ramp(x1, x2, v1, v2, -a_max, v_max=-v_max),

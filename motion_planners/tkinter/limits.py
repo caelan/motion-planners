@@ -109,30 +109,36 @@ def find_max_curve(curve, start_t=None, end_t=None, norm=INF, **kwargs):
 
 ##################################################
 
-def optimize_curve(curve, start_t=None, end_t=None): # fn=None
+def maximize_curve(curve, start_t=None, end_t=None): # fn=None
     if start_t is None:
         start_t = curve.x[0]
     if end_t is None:
         end_t = curve.x[-1]
+    #d = curve(start_t)
     derivative = curve.derivative(nu=1)
     times = list(curve.x)
-    for roots in derivative.roots(discontinuity=True):
-        times.extend(roots)
-    times = sorted(t for t in times if start_t <= t <= end_t) # TODO: filter repeated
+    roots = derivative.roots(discontinuity=True)
+    for r in roots:
+        if r.shape:
+            times.extend(r)
+        else:
+            times.append(r)
+    times = sorted(t for t in times if not np.isnan(t) and (start_t <= t <= end_t)) # TODO: filter repeated
     #fn = lambda t: max(np.absolute(curve(t)))
-    fn = lambda t: np.linalg.norm(curve(t), ord=INF)
-    max_time = max(times, key=fn)
-    return max_time, fn(max_time)
+    fn = lambda t: np.linalg.norm(curve(t), ord=INF) if curve(t).shape else float(curve(t))
+    #fn = max
+    max_t = max(times, key=fn)
+    return max_t, fn(max_t)
 
 ##################################################
 
 def find_max_velocity(positions_curve, **kwargs):
     velocities_curve = positions_curve.derivative(nu=1)
     #return find_max_curve(velocities_curve, **kwargs)
-    return optimize_curve(velocities_curve)
+    return maximize_curve(velocities_curve)
 
 
 def find_max_acceleration(positions_curve, **kwargs):
     accelerations_curve = positions_curve.derivative(nu=2)
     #return find_max_curve(accelerations_curve, **kwargs)
-    return optimize_curve(accelerations_curve)
+    return maximize_curve(accelerations_curve)
