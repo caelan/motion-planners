@@ -5,15 +5,16 @@ import argparse
 import time
 import random
 
+from motion_planners.parabolic import solve_multi_poly
 from ..parabolic import opt_straight_line
-from ..retime import min_linear_spline, spline_duration
+from ..retime import spline_duration
 from .discretize import time_discretize_curve, V_MAX, A_MAX
 from .limits import get_max_velocity
-from .smooth import smooth
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn
 from .viewer import create_box, draw_environment, add_points, \
     add_roadmap, get_box_center, add_path, create_cylinder
-from ..utils import user_input, profiler, INF, compute_path_cost, get_distance, elapsed_time, get_pairs, remove_redundant, waypoints_from_path
+from ..utils import user_input, profiler, INF, compute_path_cost, elapsed_time, get_pairs, \
+    remove_redundant, waypoints_from_path
 from ..prm import prm
 from ..lazy_prm import lazy_prm
 from ..rrt_connect import rrt_connect, birrt
@@ -36,7 +37,7 @@ ALGORITHMS = [
 ##################################################
 
 def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
-    from scipy.interpolate import CubicHermiteSpline
+    from scipy.interpolate import CubicSpline
     d = len(path[0])
     # v_max = 5.*np.ones(d)
     # a_max = v_max / 1.
@@ -50,40 +51,27 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     #durations = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
     #                     for x1, x2 in get_pairs(waypoints)]
 
+    durations += 1e-2*np.ones(len(durations))
+    # min_t = 1e-2
+    # durations = np.maximum(min_t*np.ones(len(durations)), durations)
+
     times = np.cumsum(durations)
+    #positions_curve = interp1d(times, waypoints, kind='quadratic', axis=0) # linear | slinear | quadratic | cubic
+    positions_curve = CubicSpline(times, waypoints, bc_type='clamped')
     velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
+    #positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
 
-    positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
-    #positions_curve = interp1d(times, waypoints, kind='quadratic', axis=0) # Cannot differentiate
+    # positions_curve = smooth(positions_curve,
+    #                          #v_max=None, a_max=None,
+    #                          v_max=v_max, a_max=a_max,
+    #                          **kwargs)
+    positions_curve = solve_multi_poly(times, waypoints, velocities, v_max, a_max)
+    #positions_curve = positions_curve.spline()
+    #positions_curve = positions_curve.hermite_spline()
+    print(positions_curve)
+    #print(positions_curve.roots())
 
-    positions_curve = smooth(positions_curve,
-                             #v_max=None, a_max=None,
-                             v_max=v_max, a_max=a_max,
-                             **kwargs)
     return positions_curve
-
-def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | slinear | quadratic | cubic
-    from scipy.interpolate import CubicHermiteSpline
-    #from numpy import polyfit
-    waypoints = remove_redundant(path)
-    waypoints = waypoints_from_path(waypoints)
-
-    #print(len(path), len(waypoints))
-    differences = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
-    times = np.cumsum(differences) / velocity
-    #positions_curve = interp1d(times, waypoints, kind=kind, axis=0, **kwargs)
-    #positions_curve = CubicSpline(times, waypoints, bc_type='clamped')
-    velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
-    positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
-    #velocities_curve = positions_curve.derivative()
-    #print([velocities_curve(t) for t in times])
-
-    d = len(path[0])
-    v_max = 5.*np.ones(d)
-    a_max = v_max / 1.
-    positions_curve = smooth(positions_curve, v_max, a_max)
-    return positions_curve
-
 
 ##################################################
 

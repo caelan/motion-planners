@@ -95,12 +95,16 @@ def find_max_curve(curve, start_t=None, end_t=None, norm=INF, **kwargs):
 
 ##################################################
 
-def optimize_curve(curve): # fn=None
+def optimize_curve(curve, start_t=None, end_t=None): # fn=None
+    if start_t is None:
+        start_t = curve.x[0]
+    if end_t is None:
+        end_t = curve.x[-1]
     derivative = curve.derivative(nu=1)
     times = list(curve.x)
-    critical = derivative.roots(discontinuity=True)
-    for k in range(critical.shape[0]):
-        times.extend(critical[k])
+    for roots in derivative.roots(discontinuity=True):
+        times.extend(roots)
+    times = sorted(t for t in times if start_t <= t <= end_t) # TODO: filter repeated
     #fn = lambda t: max(np.absolute(curve(t)))
     fn = lambda t: np.linalg.norm(curve(t), ord=INF)
     max_time = max(times, key=fn)

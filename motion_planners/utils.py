@@ -144,6 +144,10 @@ def get_sign(x):
         return -1
     return x
 
+
+def strictly_increasing(sequence):
+    return all(x2 > x1 for x1, x2 in get_pairs(sequence))
+
 ##################################################
 
 def get_delta(q1, q2):

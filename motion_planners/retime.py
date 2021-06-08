@@ -1,6 +1,6 @@
 import numpy as np
 
-from motion_planners.utils import INF
+from motion_planners.utils import INF, get_pairs
 
 
 def check_time(t):
@@ -41,6 +41,18 @@ def separate_poly(poly):
     from scipy.interpolate import PPoly
     k, m, d = poly.c.shape
     return [PPoly(c=poly.c[:,:,i], x=poly.x) for i in range(d)]
+
+
+def append_polys(poly1, *polys):
+    from scipy.interpolate import PPoly
+    total_poly = poly1
+    for poly in polys:
+        new_xs = [total_poly.x[-1] + (x - poly.x[0]) for x in poly.x[1:]]
+        total_poly = PPoly(c=np.append(total_poly.c, poly.c, axis=1),
+                           x=np.append(total_poly.x, new_xs))
+        #total_poly.extend()
+    return total_poly
+
 
 def spline_duration(spline):
     return spline.x[-1] - spline.x[0]
@@ -129,3 +141,32 @@ def min_linear_spline(x1, x2, v_max, a_max, t0=0.):
     # c[:, 2] = [0.5 * accels[2], velocity_curve(t_ramp), position_curve(t_ramp) + velocity_curve(t_ramp)*t_hold]
     # spline = PPoly(c=c, x=times) # TODO: extend
     return spline
+
+
+class MultiPPoly(object):
+    def __init__(self, polys):
+        self.polys = list(polys)
+        self.x = sorted(np.concatenate([poly.x for poly in self.polys]))
+        self.x = [self.x[0]] + [x2 for x1, x2 in get_pairs(self.x) if x2 > x1]
+    def __call__(self, *args, **kwargs):
+        return np.array([poly(*args, **kwargs) for poly in self.polys])
+    def derivative(self, *args, **kwargs):
+        return MultiPPoly([poly.derivative(*args, **kwargs) for poly in self.polys])
+    def antiderivative(self, *args, **kwargs):
+        return MultiPPoly([poly.antiderivative(*args, **kwargs) for poly in self.polys])
+    def roots(self, *args, **kwargs):
+        return np.array([poly.roots(*args, **kwargs) for poly in self.polys])
+    def spline(self, **kwargs):
+        from scipy.interpolate import CubicSpline
+        times = self.x
+        positions = [self(x) for x in times]
+        return CubicSpline(times, positions, bc_type='clamped', **kwargs)
+    def hermite_spline(self, **kwargs):
+        from scipy.interpolate import CubicHermiteSpline
+        times = self.x
+        positions = [self(x) for x in times]
+        derivative = self.derivative()
+        velocities = [derivative(x) for x in times]
+        return CubicHermiteSpline(times, positions, dydx=velocities, **kwargs)
+    def __str__(self):
+        return '{}()'.format(self.__class__.__name__, *self.polys)
