@@ -4,6 +4,7 @@ import numpy as np
 import argparse
 import time
 import random
+import sys
 
 from ..parabolic import solve_multi_poly,  opt_straight_line
 from ..retime import spline_duration
@@ -51,7 +52,7 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     #durations = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
     #                     for x1, x2 in get_pairs(waypoints)]
 
-    # durations += 1e-2*np.ones(len(durations))
+    durations += 1e-3*np.ones(len(durations))
     # min_t = 1e-2
     # durations = np.maximum(min_t*np.ones(len(durations)), durations)
 
@@ -65,10 +66,10 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     #positions_curve = positions_curve.spline()
     #positions_curve = positions_curve.hermite_spline()
 
-    # positions_curve = smooth_curve(positions_curve,
-    #                                #v_max=None, a_max=None,
-    #                                v_max=v_max, a_max=a_max,
-    #                                **kwargs)
+    positions_curve = smooth_curve(positions_curve,
+                                   #v_max=None, a_max=None,
+                                   v_max=v_max, a_max=a_max,
+                                   **kwargs)
 
     return positions_curve
 
@@ -100,6 +101,10 @@ def main():
     print(args)
 
     seed = args.seed
+    if seed is None:
+        #seed = random.randint(0, sys.maxsize)
+        seed = random.randint(0, 2**8)
+    print('Seed:', seed)
     random.seed(seed)
     np.random.seed(seed)
 

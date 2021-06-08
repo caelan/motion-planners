@@ -7,6 +7,8 @@ from motion_planners.retime import curve_from_controls, parabolic_val, check_tim
 from motion_planners.tkinter.limits import maximize_curve
 from motion_planners.utils import INF, get_sign, strictly_increasing, get_pairs
 
+EPSILON = 1e-6
+
 def check_curve(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
     end_times = np.append(p_curve.x[:1], p_curve.x[-1:])
     v_curve = p_curve.derivative()
@@ -21,10 +23,10 @@ def check_curve(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
     if not np.allclose([v1, v2], [float(v_curve(t)) for t in end_times]):
         raise RuntimeError([v1, v2], [float(v_curve(t)) for t in end_times])
     all_times = p_curve.x
-    if not all(abs(v_curve(t)) <= abs(v_max) for t in all_times):
+    if not all(abs(v_curve(t)) <= abs(v_max) + EPSILON for t in all_times):
         raise RuntimeError(abs(v_max), [abs(v_curve(t)) for t in all_times])
     a_curve = v_curve.derivative()
-    if not all(abs(a_curve(t)) <= abs(a_max) for t in all_times):
+    if not all(abs(a_curve(t)) <= abs(a_max) + EPSILON for t in all_times):
         raise RuntimeError(abs(a_max), [abs(a_curve(t)) for t in all_times])
     # TODO: check continuity
 
@@ -44,9 +46,9 @@ def zero_two_ramp(x1, x2, T, v_max=INF, a_max=INF):
     d = abs(x2 - x1)
     t_accel = T / 2.
     a = d / t_accel ** 2 # Lower accel
-    if a > a_max + 1e-6:
+    if a > a_max + EPSILON:
         return None
-    if a*t_accel > v_max:
+    if a*t_accel > v_max + EPSILON:
         return None
     a = min(a, a_max) # Numerical error
     durations = [t_accel, t_accel]
@@ -67,7 +69,7 @@ def zero_three_stage(x1, x2, T, v_max=INF, a_max=INF):
     if not solutions:
         return None
     t1 = t3 = min(solutions)
-    if t1*a_max > v_max:
+    if t1*a_max > v_max + EPSILON:
         return None
     t2 = T - t1 - t3 # Lower velocity
     durations = [t1, t2, t3]
@@ -130,14 +132,14 @@ def min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=INF):
     for a in np.roots(eqn): # eqn.roots
         if isinstance(a, complex) or (a == 0):
             continue
-        if abs(a) >= abs(a_max):
+        if abs(a) > abs(a_max) + EPSILON:
             continue
         a = sign*a
         ts = (T + (v2 - v1) / a) / 2.
         if not (0 <= ts <= T):
             continue
         vs = v1 + a * ts
-        if abs(vs) > abs(v_max):
+        if abs(vs) > abs(v_max) + EPSILON:
             continue
         # vs = a * (-ts) + v2
         # if abs(vs) > abs(v_max):
@@ -186,7 +188,7 @@ def solve_three_stage(x1, x2, v1, v2, v_max, a):
     tp1 = (v_max - v1) / a
     tl = (v2 ** 2 + v1 ** 2 - 2 * v_max ** 2) / (2 * v_max * a) \
          + (x2 - x1) / v_max
-    tp2 = (v2 - v_max) / a
+    tp2 = (v2 - v_max) / -a # Difference from Hauser
     return tp1, tl, tp2
 
 
@@ -194,7 +196,7 @@ def min_three_stage(x1, x2, v1, v2, T, v_max, a_max=INF):
     #assert abs(v_max) < INF
     a = (v_max**2 - v_max*(v1 + v2) + (v1**2 + v2**2)/2) \
         / (T*abs(v_max) - (x2 - x1))
-    if abs(a) > abs(a_max):
+    if abs(a) > abs(a_max) + EPSILON:
         return None
     durations = solve_three_stage(x1, x2, v1, v2, v_max, a)
     if any(t < 0 for t in durations): # TODO: check T
@@ -221,22 +223,22 @@ def quickest_three_stage(x1, x2, v1, v2, v_max, a_max):
 ##################################################
 
 def min_stage(x1, x2, v1, v2, T, v_max=INF, a_max=INF):
-    if (v1 == 0.) and (v2 == 0.):
-        candidates = [
-            zero_two_ramp(x1, x2, T, v_max=v_max, a_max=a_max),
-            zero_three_stage(x1, x2, T, v_max=v_max, a_max=a_max),
-        ]
-    else:
-        # TODO: why does this fail when (v1 == 0) and (v2 == 0)
-        candidates = [
-            min_two_ramp(x1, x2, v1, v2, T, a_max=a_max, v_max=v_max),
-            min_two_ramp(x1, x2, v1, v2, T, a_max=-a_max, v_max=-v_max),
-        ]
-        #if v_max != INF:
-        candidates.extend([
-            min_three_stage(x1, x2, v1, v2, T, v_max, a_max),
-            min_three_stage(x1, x2, v1, v2, T, -v_max, -a_max),
-        ])
+    # if (v1 == 0.) and (v2 == 0.):
+    #     candidates = [
+    #         zero_two_ramp(x1, x2, T, v_max=v_max, a_max=a_max),
+    #         zero_three_stage(x1, x2, T, v_max=v_max, a_max=a_max),
+    #     ]
+    #else:
+    # TODO: why does this fail when (v1 == 0) and (v2 == 0)
+    candidates = [
+        min_two_ramp(x1, x2, v1, v2, T, a_max=a_max, v_max=v_max),
+        min_two_ramp(x1, x2, v1, v2, T, a_max=-a_max, v_max=-v_max),
+    ]
+    #if v_max != INF:
+    candidates.extend([
+        min_three_stage(x1, x2, v1, v2, T, v_max, a_max),
+        min_three_stage(x1, x2, v1, v2, T, -v_max, -a_max),
+    ])
     candidates = [t for t in candidates if t is not None]
     if not candidates:
         return None
