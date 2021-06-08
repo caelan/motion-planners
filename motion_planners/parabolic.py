@@ -29,7 +29,9 @@ def check_curve(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
 
 ##################################################
 
-def opt_straight_line(x1, x2, v_max=INF, a_max=INF):
+def opt_straight_line(x1, x2, T_min=0., v_max=INF, a_max=INF):
+    # TODO: solve for a given T which is higher than the min T
+    # Can always rest at the start of the trajectory if need be
     assert (v_max >= 0) and (a_max >= 0)
     sign = get_sign(x2 - x1)
     #v_max = abs(x2 - x1) / abs(v_max)
@@ -39,17 +41,27 @@ def opt_straight_line(x1, x2, v_max=INF, a_max=INF):
 
     t_accel = math.sqrt(d / a_max) # 1/2.*a*t**2 = d/2.
     if a_max*t_accel <= v_max:
-        T = 2*t_accel
-        #return T
+        T = 2.*t_accel
+        #a = a_max
+
+        assert T_min <= T
+        T = max(T_min, T)
+        t_accel = T/2.
+        a = min(d / t_accel**2, a_max) # Lower excel
         durations = [t_accel, t_accel]
-        accels = [sign * a_max, -sign * a_max]
+        accels = [sign * a, -sign * a]
         p_curve = curve_from_controls(durations, accels, x0=x1)
+        #total_accel = p_curve.integrate(p_curve.x[0], p_curve.x[-1])
         check_curve(p_curve, x1, x2, v1=0., v2=0., T=T, v_max=v_max, a_max=a_max)
         return p_curve
 
-    t1 = t3 = (v_max - 0) / a_max
+    t1 = t3 = (v_max - 0.) / a_max
     t2 = (d - 2 * parabolic_val(t1, a=a_max)) / v_max
     T = t1 + t2 + t3
+
+    assert T_min <= T
+    T = max(T_min, T)
+    t3 = T - t1 - t2 # Lower velocity
     #return T
     durations = [t1, t2, t3]
     accels = [sign * a_max, 0., -sign * a_max]
