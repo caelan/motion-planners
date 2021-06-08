@@ -9,6 +9,7 @@ A_MAX = V_MAX / 2.
 #V_MAX = INF*np.ones(2)
 #A_MAX = 1e6*np.ones(2)
 
+##################################################
 
 def filter_proximity(times, positions, resolution=0.):
     assert len(times) == len(positions)
@@ -22,6 +23,7 @@ def filter_proximity(times, positions, resolution=0.):
     # new_positions.append(positions_curve(new_times[-1]))
     return new_times, new_positions
 
+##################################################
 
 def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocities=None, time_step=1e-2):
     if start_t is None:

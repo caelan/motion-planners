@@ -5,6 +5,13 @@ import numpy as np
 from motion_planners.tkinter.viewer import is_collision_free, contains, point_collides, sample_line
 from motion_planners.utils import interval_generator, get_distance, get_delta
 
+def get_distance_fn(weights):
+    difference_fn = get_delta
+    def fn(q1, q2):
+        diff = np.array(difference_fn(q2, q1))
+        return np.sqrt(np.dot(weights, diff * diff))
+    return fn
+
 
 def get_sample_fn(region, obstacles=[], use_halton=True): #, check_collisions=False):
     # TODO: Gaussian sampling for narrow passages
@@ -78,11 +85,3 @@ def get_extend_fn(environment, obstacles=[]):
                 path.append(q)
 
     return extend_fn, roadmap
-
-
-def get_distance_fn(weights):
-    difference_fn = get_delta
-    def fn(q1, q2):
-        diff = np.array(difference_fn(q2, q1))
-        return np.sqrt(np.dot(weights, diff * diff))
-    return fn

@@ -57,6 +57,7 @@ def check_spline(spline, v_max=None, a_max=None, start=None, end=None):
                     return False
     return True
 
+##################################################
 
 def optimize(objective, lower, upper, num=10, max_time=INF, verbose=False, **kwargs):
     # https://www.cvxpy.org/examples/basic/socp.html
@@ -75,35 +76,6 @@ def optimize(objective, lower, upper, num=10, max_time=INF, verbose=False, **kwa
                 print(iteration, x0, result.x, result.fun) # objective(result.x)
     return best_t, best_f
 
-
-def optimize_curve(curve): # fn=None
-    derivative = curve.derivative(nu=1)
-    times = list(curve.x)
-    critical = derivative.roots(discontinuity=True)
-    for k in range(critical.shape[0]):
-        times.extend(critical[k])
-    #fn = lambda t: max(np.absolute(curve(t)))
-    fn = lambda t: np.linalg.norm(curve(t), ord=INF)
-    max_time = max(times, key=fn)
-    return max_time, fn(max_time)
-
-
-def find_max_velocity(positions_curve, **kwargs):
-    velocities_curve = positions_curve.derivative(nu=1)
-    #return find_max_curve(velocities_curve, **kwargs)
-    return optimize_curve(velocities_curve)
-
-
-def find_max_acceleration(positions_curve, **kwargs):
-    accelerations_curve = positions_curve.derivative(nu=2)
-    #return find_max_curve(accelerations_curve, **kwargs)
-    return optimize_curve(accelerations_curve)
-
-
-def get_max_velocity(velocities, norm=INF):
-    return np.linalg.norm(velocities, ord=norm)
-
-
 def find_max_curve(curve, start_t=None, end_t=None, norm=INF, **kwargs):
     if start_t is None:
         start_t = curve.x[0]
@@ -120,3 +92,32 @@ def find_max_curve(curve, start_t=None, end_t=None, norm=INF, **kwargs):
     best_f = objective(best_t)
     best_t, best_f = best_t[0], -best_f
     return best_t, best_f
+
+##################################################
+
+def optimize_curve(curve): # fn=None
+    derivative = curve.derivative(nu=1)
+    times = list(curve.x)
+    critical = derivative.roots(discontinuity=True)
+    for k in range(critical.shape[0]):
+        times.extend(critical[k])
+    #fn = lambda t: max(np.absolute(curve(t)))
+    fn = lambda t: np.linalg.norm(curve(t), ord=INF)
+    max_time = max(times, key=fn)
+    return max_time, fn(max_time)
+
+##################################################
+
+def get_max_velocity(velocities, norm=INF):
+    return np.linalg.norm(velocities, ord=norm)
+
+def find_max_velocity(positions_curve, **kwargs):
+    velocities_curve = positions_curve.derivative(nu=1)
+    #return find_max_curve(velocities_curve, **kwargs)
+    return optimize_curve(velocities_curve)
+
+
+def find_max_acceleration(positions_curve, **kwargs):
+    accelerations_curve = positions_curve.derivative(nu=2)
+    #return find_max_curve(accelerations_curve, **kwargs)
+    return optimize_curve(accelerations_curve)
