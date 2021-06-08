@@ -405,7 +405,8 @@ def check_spline(spline, v_max=None, a_max=None, start=None, end=None):
 def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, num=100, max_time=INF):
     start_time = time.time()
     if not check_spline(start_positions_curve, v_max, a_max):
-        return None
+        #return None
+        return start_positions_curve
     from scipy.interpolate import CubicHermiteSpline
     positions_curve = start_positions_curve
     for iteration in range(num):
@@ -495,9 +496,9 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
     return positions_curve
 
 V_MAX = 5.*np.ones(2)
-#A_MAX = V_MAX / 2.
+A_MAX = V_MAX / 2.
 #V_MAX = INF*np.ones(2)
-A_MAX = 1e6*np.ones(2)
+#A_MAX = 1e6*np.ones(2)
 
 def optimistic_time(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
     d = len(x1)
@@ -514,6 +515,10 @@ def optimistic_time(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
             np.linalg.norm(np.divide(np.subtract(v2, v1), a_max), ord=INF),
         ])
     return max(lower_bounds)
+
+def ramp_planner():
+    pass
+
 
 def conservative(x1, x2, v_max, a_max, min_t=INF): # v1=0., v2=0.,
     from scipy.interpolate import PPoly
@@ -566,10 +571,6 @@ def conservative(x1, x2, v_max, a_max, min_t=INF): # v1=0., v2=0.,
     # spline = PPoly(c=c, x=times) # TODO: extend
     return spline.x[-1]
 
-def multivariate_conservative(x1, x2, v_max, a_max):
-    d = len(x1)
-    return max([conservative(x1[k], x2[k], v_max[k], a_max[k]) for k in range(d)])
-
 def get_max_velocity(velocities, norm=INF):
     return np.linalg.norm(velocities, ord=norm)
 
@@ -585,20 +586,22 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     #durations = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
     durations = [0.] + [max(conservative(x1[k], x2[k], v_max=v_max[k], a_max=a_max[k]) for k in range(d))
                         for x1, x2 in get_pairs(waypoints)] # solve_zero_ramp | conservative
+    print(durations)
+    durations = [0.] + [max(solve_zero_ramp(x1[k], x2[k], v_max=v_max[k], a_max=a_max[k]) for k in range(d))
+                        for x1, x2 in get_pairs(waypoints)] # solve_zero_ramp | conservative
+    print(durations)
     #durations = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
     #                     for x1, x2 in get_pairs(waypoints)]
-    # durations = [0.] + [multivariate_conservative(x1, x2, v_max, a_max)
-    #                       for x1, x2 in get_pairs(waypoints)]
-    print(durations)
+
     times = np.cumsum(durations)
     velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
     positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
     #positions_curve = interp1d(times, waypoints, kind='quadratic', axis=0) # Cannot differentiate
 
-    # positions_curve = smooth(positions_curve,
-    #                          v_max=None, a_max=None,
-    #                          #v_max=v_max, a_max=a_max,
-    #                          **kwargs)
+    positions_curve = smooth(positions_curve,
+                             #v_max=None, a_max=None,
+                             v_max=v_max, a_max=a_max,
+                             **kwargs)
     return positions_curve
 
 def interpolate_path(path, velocity=1., kind='linear', **kwargs): # linear | slinear | quadratic | cubic
@@ -640,37 +643,48 @@ def optimize(objective, lower, upper, num=10, max_time=INF, verbose=False, **kwa
                 print(iteration, x0, result.x, result.fun) # objective(result.x)
     return best_t, best_f
 
-def find_max_curve(curve, start_t=None, end_t=None, ord=2, **kwargs):
+def find_max_curve(curve, start_t=None, end_t=None, norm=INF, **kwargs):
     if start_t is None:
         start_t = curve.x[0]
     if end_t is None:
         end_t = curve.x[-1]
-    objective = lambda t: -np.linalg.norm(curve(t), ord=ord) # 2 | INF
-    #objective = lambda t: -np.linalg.norm(curve(t), ord=2)**2 # t[0]
+    objective = lambda t: -np.linalg.norm(curve(t), ord=norm) # 2 | INF
+    #objective = lambda t: -np.linalg.norm(curve(t), norm=2)**2 # t[0]
     #accelerations_curve = positions_curve.derivative() # TODO: ValueError: failed in converting 7th argument `g' of _lbfgsb.setulb to C/Fortran array
     #grad = lambda t: np.array([-2*sum(accelerations_curve(t))])
     #result = minimize_scalar(objective, method='bounded', bounds=(start_t, end_t)) #, options={'disp': False})
 
     #print(max(-objective(t) for t in curve.x))
     best_t, best_f = optimize(objective, lower=[start_t], upper=[end_t], **kwargs)
+    best_f = objective(best_t)
     best_t, best_f = best_t[0], -best_f
     return best_t, best_f
+
+def separate_poly(poly):
+    from scipy.interpolate import PPoly
+    k, m, d = poly.c.shape
+    return [PPoly(c=poly.c[:,:,i], x=poly.x) for i in range(d)]
+
+def optimize_curve(curve): # fn=None
+    derivative = curve.derivative(nu=1)
+    times = list(curve.x)
+    critical = derivative.roots(discontinuity=True)
+    for k in range(critical.shape[0]):
+        times.extend(critical[k])
+    #fn = lambda t: max(np.absolute(curve(t)))
+    fn = lambda t: np.linalg.norm(curve(t), ord=INF)
+    max_time = max(times, key=fn)
+    return max_time, fn(max_time)
 
 def find_max_velocity(positions_curve, **kwargs):
     velocities_curve = positions_curve.derivative(nu=1)
     #return find_max_curve(velocities_curve, **kwargs)
-    accelerations_curve = velocities_curve.derivative(nu=1)
-    times = list(velocities_curve.x)
-    critical = accelerations_curve.roots(discontinuity=True)
-    for k in range(critical.shape[0]):
-        times.extend(critical[k])
-    fn = lambda t: np.linalg.norm(velocities_curve(t), ord=INF)
-    max_time = max(times, key=fn)
-    return max_time, fn(max_time)
+    return optimize_curve(velocities_curve)
 
 def find_max_acceleration(positions_curve, **kwargs):
     accelerations_curve = positions_curve.derivative(nu=2)
-    return find_max_curve(accelerations_curve, **kwargs)
+    #return find_max_curve(accelerations_curve, **kwargs)
+    return optimize_curve(accelerations_curve)
 
 def filter_proximity(times, positions, resolution=0.):
     assert len(times) == len(positions)
@@ -691,16 +705,20 @@ def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocit
         end_t = positions_curve.x[-1]
     assert start_t < end_t
 
-    ord = INF
+    norm = INF
     d = len(positions_curve(start_t))
     resolution = 2e-2
     resolutions = resolution*np.ones(d)
     if max_velocities is None:
-        max_t, max_v = find_max_velocity(positions_curve, start_t=start_t, end_t=end_t, ord=ord, num=100)
-        #max_t, max_v = INF, np.linalg.norm(V_MAX)
+        # TODO: adjust per trajectory segment
+        v_max_t, max_v = find_max_velocity(positions_curve, start_t=start_t, end_t=end_t, norm=norm, num=100)
+        a_max_t, max_a = find_max_acceleration(positions_curve, start_t=start_t, end_t=end_t, norm=norm, num=100)
+        #v_max_t, max_v = INF, np.linalg.norm(V_MAX)
         time_step = resolution / max_v
-        print('Max velocity: {:.3f} (at time {:.3f}) | Limit: {:.3f} | Step: {:.3f} | Duration: {:.3f}'.format(
-            max_v, max_t, np.linalg.norm(V_MAX, ord=ord), time_step, positions_curve.x[-1])) # 2 | INF
+        print('Max velocity: {:.3f}/{:.3f} (at time {:.3f}) | Max accel: {:.3f}/{:.3f} (at time {:.3f}) | '
+              'Step: {:.3f} | Duration: {:.3f}'.format(
+            max_v, np.linalg.norm(V_MAX, ord=norm), v_max_t, max_a, np.linalg.norm(A_MAX, ord=norm), a_max_t,
+            time_step, positions_curve.x[-1])) # 2 | INF
         #input()
     else:
         time_step = np.min(np.divide(resolutions, max_velocities))
