@@ -27,6 +27,35 @@ def find_lower_bound(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
 
 ##################################################
 
+def test_spline(best_t, x1, x2, v1, v2):
+    observations = [
+        (0., x1[0], 0),
+        (best_t, x2[0], 0),
+        (0., v1[0], 1),
+        (best_t, v2[0], 1),
+    ]
+    degree = len(observations) - 1
+
+    from numpy import poly1d, polyfit
+    terms = []
+    for k in range(degree + 1):
+        coeffs = np.zeros(degree + 1)
+        coeffs[k] = 1.
+        terms.append(poly1d(coeffs))
+    # series = poly1d(np.ones(degree+1))
+
+    A = []
+    b = []
+    for t, v, nu in observations:
+        A.append([term.deriv(m=nu)(t) for term in terms])
+        b.append(v)
+    print(A)
+    print(b)
+    print(np.linalg.solve(A, b))
+    # print(polyfit([t for t, _, nu in observations if nu == 0],
+    #              [v for _, v, nu in observations if nu == 0], deg=degree))
+    # TODO: compare with CubicHermiteSpline
+
 def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, num=1000, max_time=INF):
     # TODO: rename smoothing.py to shortcutting.py
     from scipy.interpolate import CubicHermiteSpline
@@ -80,7 +109,9 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
 
         spliced_durations = [t1 - times[i1], best_t, times[i2] - t2]
         spliced_times = [0, best_t]
-        # new_positions_curve = CubicHermiteSpline(spliced_times, spliced_positions, dydx=spliced_velocities)
+        #new_positions_curve = CubicHermiteSpline(spliced_times, spliced_positions, dydx=spliced_velocities)
+        # print(new_positions_curve.x, new_positions_curve.c)
+        # input()
         # if not check_spline(new_positions_curve, v_max, a_max):
         #     continue
 

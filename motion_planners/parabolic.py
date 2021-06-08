@@ -3,11 +3,10 @@ import math
 import numpy as np
 
 from motion_planners.retime import curve_from_controls, parabolic_val, check_time, spline_duration, append_polys, \
-    MultiPPoly, filter_times
-from motion_planners.tkinter.limits import maximize_curve
+    MultiPPoly
+from motion_planners.tkinter.limits import maximize_curve, EPSILON
 from motion_planners.utils import INF, get_sign, strictly_increasing, get_pairs
 
-EPSILON = 1e-6
 
 def check_curve(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
     end_times = np.append(p_curve.x[:1], p_curve.x[-1:])
@@ -199,7 +198,7 @@ def min_three_stage(x1, x2, v1, v2, T, v_max, a_max=INF):
     if abs(a) > abs(a_max) + EPSILON:
         return None
     durations = solve_three_stage(x1, x2, v1, v2, v_max, a)
-    if any(t < 0 for t in durations): # TODO: check T
+    if any(t <= 0 for t in durations): # TODO: check T
         return None
     accels = [a, 0., -a]
     p_curve = curve_from_controls(durations, accels, t0=0., x0=x1, v0=v1)

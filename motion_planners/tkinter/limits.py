@@ -4,6 +4,8 @@ import numpy as np
 
 from motion_planners.utils import INF, elapsed_time
 
+EPSILON = 1e-6
+
 def get_max_velocity(velocities, norm=INF):
     return np.linalg.norm(velocities, ord=norm)
 
@@ -30,12 +32,12 @@ def check_spline(spline, v_max=None, a_max=None, start=None, end=None):
     if v_max is not None:
         t, v = find_max_velocity(spline, start=start, end=end)
         print('Max velocity: {:.3f}/{:.3f} (at time {:.3f})'.format(v, get_max_velocity(v_max), t))
-        if abs(v) > get_max_velocity(v_max):
+        if abs(v) > get_max_velocity(v_max) + EPSILON:
             return False
     if a_max is not None:
         t, a = find_max_acceleration(spline, start=start, end=end)
         print('Max accel: {:.3f}/{:.3f} (at time {:.3f})'.format(a, get_max_velocity(a_max), t))
-        if abs(a) > get_max_velocity(a_max):
+        if abs(a) > get_max_velocity(a_max) + EPSILON:
             return False
     return True
 
