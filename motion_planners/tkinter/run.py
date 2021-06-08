@@ -166,7 +166,10 @@ def poly_prod(p0, *polys):
         p_total = np.poly1d(np.polymul(p_total, p))
     return p_total
 
-def curve_from_controls(durations, accels, t0=0., x0=0., v0=0):
+def parabolic_val(t=0., t0=0., x0=0., v0=0., a=0.):
+    return x0 + v0*(t - t0) + 1/2.*a*(t - t0)**2
+
+def curve_from_controls(durations, accels, t0=0., x0=0., v0=0.):
     assert len(durations) == len(accels)
     #from numpy.polynomial import Polynomial
     #t = Polynomial.identity()
@@ -241,17 +244,37 @@ def min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=INF):
     assert np.allclose([v1, v2], [float(v_curve(t)) for t in end_times])
     return p_curve
 
+def solve_one_ramp(x1, x2, v_max=INF):
+    return abs(x2 - x1) / abs(v_max)
+
+def solve_zero_ramp(x1, x2, v_max=INF, a_max=INF):
+    assert (v_max >= 0) and (a_max >= 0)
+    #v_max = abs(x2 - x1) / abs(v_max)
+    d = abs(x2 - x1)
+    t_accel = math.sqrt(d / a_max) # 1/2.*a*t**2 = d/2.
+    if a_max*t_accel <= v_max:
+        T = 2*t_accel
+        return T
+    t1 = t3 = (v_max - 0) / a_max
+    t2 = (d - 2*parabolic_val(t1, a=a_max)) / v_max
+    T = t1 + t2 + t3
+    return T
 
 def solve_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
     #optimize_two_ramp(x1, x2, v1, v2, a_max)
     solutions = np.roots([
-        a_max,
-        2 * v1,
-        (v1**2 - v2**2) / (2 * a_max) - (x2 - x1),
+        a_max, # t**2
+        2 * v1, # t
+        (v1**2 - v2**2) / (2 * a_max) + (x1 - x2), # 1
     ])
+    print()
+    print(x1, x2, v1, v2, a_max, v_max)
     solutions = [t for t in solutions if check_time(t)]
-    #solutions = [t for t in solutions if t <= (v2 - v1) / a_max] # TODO: this constraint is strange
+    print(solutions)
+    solutions = [t for t in solutions if 0 <= t <= abs(v2 - v1) / abs(a_max)] # TODO: this constraint is strange
+    print(solutions)
     solutions = [t for t in solutions if abs(v1 + t*a_max) <= abs(v_max)]
+    print(solutions)
     if not solutions:
         return None
     t = min(solutions)
@@ -286,22 +309,32 @@ def solve_three_ramp(x1, x2, v1, v2, v_max, a_max):
     #min_three_ramp(x1, x2, v1, v2, v_max, a_max, T)
     return T
 
-def solve_ramp(x1, x2, v1, v2, v_max, a_max):
+def solve_ramp(x1, x2, v1, v2, v_max=INF, a_max=INF, min_t=0.):
     # TODO: handle infinite acceleration
+    assert (v_max >= 0.) and (a_max >= 0.)
     assert all(abs(v) <= v_max for v in [v1, v2])
+    if (v_max == INF) and (a_max == INF):
+        T = 0
+        return min(min_t, T) # TODO: throw an error
+    if a_max == INF:
+        T = solve_one_ramp(x1, x2, v_max=v_max)
+        return min(min_t, T)
+
     candidates = [
         solve_two_ramp(x1, x2, v1, v2, a_max, v_max=v_max),
         solve_two_ramp(x1, x2, v1, v2, -a_max, v_max=-v_max),
     ]
-    if v_max < INF:
+    if v_max != INF:
         candidates.extend([
             solve_three_ramp(x1, x2, v1, v2, v_max, a_max),
             solve_three_ramp(x1, x2, v1, v2, -v_max, -a_max),
         ])
     candidates = [t for t in candidates if t is not None]
+    assert candidates
     if not candidates:
         return None
-    return min(t for t in candidates)
+    T = min(t for t in candidates)
+    return min(min_t, T)
 
 def solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max):
     d = len(x1)
@@ -309,6 +342,8 @@ def solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max):
     # if any(t is None for t in durations):
     #     return None
     durations = [t for t in durations if t is not None]
+    print(durations)
+    input()
     if not durations:
         return None
     return max(durations)
@@ -460,7 +495,9 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
     return positions_curve
 
 V_MAX = 5.*np.ones(2)
-A_MAX = V_MAX / 2.
+#A_MAX = V_MAX / 2.
+#V_MAX = INF*np.ones(2)
+A_MAX = 1e6*np.ones(2)
 
 def optimistic_time(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
     d = len(x1)
@@ -481,14 +518,14 @@ def optimistic_time(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
 def conservative(x1, x2, v_max, a_max, min_t=INF): # v1=0., v2=0.,
     from scipy.interpolate import PPoly
     # TODO: switch time
-    if x1 > x2:
-        return conservative(x2, x1, v_max, a_max, min_t=min_t)
-    assert x2 >= x1 and (v_max >= 0) and (a_max >= 0)
+    #if x1 > x2:
+    #   return conservative(x2, x1, v_max, a_max, min_t=min_t)
+    assert (v_max >= 0) and (a_max >= 0) # and (x2 >= x1)
+    sign = +1 if x2 >= x1 else -1
     v1 = v2 = 0.
-    d = (x2 - x1)
     x_half = (x1 + x2) / 2.
 
-    position_curve = np.poly1d([0.5*a_max, v1, x1])
+    position_curve = np.poly1d([sign*0.5*a_max, v1, x1])
     velocity_curve = position_curve.deriv()
     t_half = filter_times((position_curve - np.poly1d([x_half])).roots)
     # solutions = np.roots([
@@ -496,29 +533,37 @@ def conservative(x1, x2, v_max, a_max, min_t=INF): # v1=0., v2=0.,
     #     v1,
     #     x1 - x_half,
     # ])
-    if (t_half is not None) and (velocity_curve(t_half) <= v_max):
+    if (t_half is not None) and (abs(velocity_curve(t_half)) <= v_max):
+        durations = [t_half, t_half]
+        accels = [sign * a_max, -sign * a_max]
+        spline = curve_from_controls(durations, accels, t0=0., x0=x1, v0=v1)
         T = 2*t_half
         times = [0., t_half, T]
         c = np.zeros([3, len(times) - 1])
         c[:, 0] = list(position_curve)
-        c[:, 1] = [-0.5*a_max, velocity_curve(t_half), position_curve(t_half)]
+        c[:, 1] = [-0.5*accels[1], velocity_curve(t_half), position_curve(t_half)]
         spline = PPoly(c=c, x=times)
         return spline.x[-1]
 
-    t_ramp = filter_times((velocity_curve - np.poly1d([v_max])).roots)
+    t_ramp = filter_times((velocity_curve - np.poly1d([sign*v_max])).roots)
     assert t_ramp is not None
     x_ramp = position_curve(t_ramp)
-    d_ramp = (x_ramp - x1)
+    d = abs(x2 - x1)
+    d_ramp = abs(x_ramp - x1)
     d_hold = d - 2*d_ramp
     t_hold = abs(d_hold / v_max)
-    T = 2*t_ramp + t_hold
 
-    times = [0., t_ramp, t_ramp + t_hold, T]
-    c = np.zeros([3, len(times) - 1])
-    c[:, 0] = list(position_curve)
-    c[:, 1] = [0., velocity_curve(t_half), position_curve(t_half)]
-    c[:, 2] = [-0.5 * a_max, v_max, x_ramp + d_hold]
-    spline = PPoly(c=c, x=times) # TODO: extend
+    durations = [t_ramp, t_hold, t_ramp]
+    accels = [sign * a_max, 0., -sign * a_max]
+    spline = curve_from_controls(durations, accels, t0=0., x0=x1, v0=v1)
+
+    # T = 2*t_ramp + t_hold
+    # times = [0., t_ramp, t_ramp + t_hold, T]
+    # c = np.zeros([3, len(times) - 1])
+    # c[:, 0] = list(position_curve)
+    # c[:, 1] = [0.5 * accels[1], velocity_curve(t_ramp), position_curve(t_ramp)]
+    # c[:, 2] = [0.5 * accels[2], velocity_curve(t_ramp), position_curve(t_ramp) + velocity_curve(t_ramp)*t_hold]
+    # spline = PPoly(c=c, x=times) # TODO: extend
     return spline.x[-1]
 
 def multivariate_conservative(x1, x2, v_max, a_max):
@@ -537,12 +582,15 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
 
     waypoints = remove_redundant(path)
     waypoints = waypoints_from_path(waypoints)
-    #differences = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
-    differences = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
-                         for x1, x2 in get_pairs(waypoints)]
-    # differences = [0.] + [multivariate_conservative(x1, x2, v_max, a_max)
+    #durations = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
+    durations = [0.] + [max(conservative(x1[k], x2[k], v_max=v_max[k], a_max=a_max[k]) for k in range(d))
+                        for x1, x2 in get_pairs(waypoints)] # solve_zero_ramp | conservative
+    #durations = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
+    #                     for x1, x2 in get_pairs(waypoints)]
+    # durations = [0.] + [multivariate_conservative(x1, x2, v_max, a_max)
     #                       for x1, x2 in get_pairs(waypoints)]
-    times = np.cumsum(differences)
+    print(durations)
+    times = np.cumsum(durations)
     velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
     positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
     #positions_curve = interp1d(times, waypoints, kind='quadratic', axis=0) # Cannot differentiate
