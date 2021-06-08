@@ -150,6 +150,7 @@ class MultiPPoly(object):
         self.x = [self.x[0]] + [x2 for x1, x2 in get_pairs(self.x) if x2 > x1]
     def __call__(self, *args, **kwargs):
         return np.array([poly(*args, **kwargs) for poly in self.polys])
+    # TODO: extend
     def derivative(self, *args, **kwargs):
         return MultiPPoly([poly.derivative(*args, **kwargs) for poly in self.polys])
     def antiderivative(self, *args, **kwargs):

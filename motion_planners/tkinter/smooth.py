@@ -5,10 +5,29 @@ import numpy as np
 
 from motion_planners.tkinter.limits import check_spline
 from motion_planners.tkinter.discretize import time_discretize_curve
+from motion_planners.parabolic import solve_multi_poly
 from motion_planners.utils import INF, elapsed_time, get_pairs, find
 
+def find_lower_bound(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
+    d = len(x1)
+    if v_max is None:
+        v_max = np.full(d, INF)
+    if a_max is None:
+        a_max = np.full(d, INF)
+    lower_bounds = [
+        # Instantaneously accelerate
+        np.linalg.norm(np.divide(np.subtract(x2, x1), v_max), ord=INF),
+    ]
+    if (v1 is not None) and (v2 is not None):
+        lower_bounds.extend([
+            np.linalg.norm(np.divide(np.subtract(v2, v1), a_max), ord=INF),
+        ])
+    return max(lower_bounds)
 
-def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, num=100, max_time=INF):
+##################################################
+
+def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, num=100, max_time=INF):
+    # TODO: rename smoothing.py to shortcutting.py
     start_time = time.time()
     if not check_spline(start_positions_curve, v_max, a_max):
         #return None
@@ -45,10 +64,9 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
 
         max_t = t2 - t1
         #min_t = 0
-        min_t = optimistic_time(x1, x2, v1, v2, v_max=v_max, a_max=a_max)
+        min_t = find_lower_bound(x1, x2, v1, v2, v_max=v_max, a_max=a_max)
         #min_t = optimistic_time(x1, x2, v_max=v_max, a_max=a_max)
-        # TODO: limit the distance/duration between these two points
-        if min_t >= max_t:
+        if min_t >= max_t: # TODO: limit the distance/duration between these two points
             continue
 
         best_t = random.uniform(min_t, max_t)
@@ -72,13 +90,15 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
         new_durations = np.concatenate([
             durations[:i1+1], [t1 - times[i1], best_t, times[i2] - t2], durations[i2+1:]])
         assert len(new_durations) == (i1 + 1) + (len(durations) - i2) + 2
-        print(new_durations)
         new_times = np.cumsum(new_durations)
         #new_times = [ts[0], ts[-1] + t]
 
         # TODO: splice in the new segment
-        new_positions_curve = CubicHermiteSpline(new_times, new_positions, dydx=new_velocities)
         #new_positions_curve = CubicSpline(new_times, new_positions)
+        #new_positions_curve = CubicHermiteSpline(new_times, new_positions, dydx=new_velocities)
+        new_positions_curve = solve_multi_poly(new_times, new_positions, new_velocities, v_max, a_max)
+        if new_positions_curve is None:
+            continue
         print(iteration, new_positions_curve.x[-1], positions_curve.x[-1])
         if new_positions_curve.x[-1] >= positions_curve.x[-1]:
             continue
@@ -89,31 +109,15 @@ def smooth(start_positions_curve, v_max, a_max, collision_fn=lambda q: False, nu
         # new_velocities_curve = new_positions_curve.derivative()
         # print(v2, new_velocities_curve(new_t2))
 
-        if not check_spline(new_positions_curve, v_max, a_max):
-            continue
+        # if not check_spline(new_positions_curve, v_max, a_max):
+        #     continue
 
         _, samples = time_discretize_curve(new_positions_curve, max_velocities=v_max)
         #_, samples = time_discretize_curve(new_positions_curve, start_t=new_times[i1+1], end_t=new_times[-(len(times) - i2 + 1)])
         if any(map(collision_fn, samples)):
             continue
         positions_curve = new_positions_curve
-    print(start_positions_curve.x[-1], positions_curve.x[-1])
-
+    print('Start time: {:.3f} | End time: {:.3f} | Iterations: {} | Elapsed time: {:.3f}'.format(
+        start_positions_curve.x[-1], positions_curve.x[-1], num, elapsed_time(start_time)))
+    check_spline(positions_curve, v_max, a_max)
     return positions_curve
-
-
-def optimistic_time(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
-    d = len(x1)
-    if v_max is None:
-        v_max = np.full(d, INF)
-    if a_max is None:
-        a_max = np.full(d, INF)
-    lower_bounds = [
-        # Instantaneously accelerate
-        np.linalg.norm(np.divide(np.subtract(x2, x1), v_max), ord=INF),
-    ]
-    if (v1 is not None) and (v2 is not None):
-        lower_bounds.extend([
-            np.linalg.norm(np.divide(np.subtract(v2, v1), a_max), ord=INF),
-        ])
-    return max(lower_bounds)

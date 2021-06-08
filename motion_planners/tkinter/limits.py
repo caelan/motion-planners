@@ -4,6 +4,8 @@ import numpy as np
 
 from motion_planners.utils import INF, elapsed_time
 
+def get_max_velocity(velocities, norm=INF):
+    return np.linalg.norm(velocities, ord=norm)
 
 def check_spline(spline, v_max=None, a_max=None, start=None, end=None):
     if (v_max is None) and (a_max is None):
@@ -24,6 +26,18 @@ def check_spline(spline, v_max=None, a_max=None, start=None, end=None):
     # _, a = find_max_acceleration(spline, ord=INF)
     # print(v, v_max, a, a_max)
     # input()
+
+    if v_max is not None:
+        t, v = find_max_velocity(spline, start=start, end=end)
+        print('Max velocity: {:.3f}/{:.3f} (at time {:.3f})'.format(v, get_max_velocity(v_max), t))
+        if abs(v) > get_max_velocity(v_max):
+            return False
+    if a_max is not None:
+        t, a = find_max_acceleration(spline, start=start, end=end)
+        print('Max accel: {:.3f}/{:.3f} (at time {:.3f})'.format(a, get_max_velocity(a_max), t))
+        if abs(a) > get_max_velocity(a_max):
+            return False
+    return True
 
     signs = [+1, -1]
     for i in range(start, end):
@@ -111,9 +125,6 @@ def optimize_curve(curve, start_t=None, end_t=None): # fn=None
     return max_time, fn(max_time)
 
 ##################################################
-
-def get_max_velocity(velocities, norm=INF):
-    return np.linalg.norm(velocities, ord=norm)
 
 def find_max_velocity(positions_curve, **kwargs):
     velocities_curve = positions_curve.derivative(nu=1)

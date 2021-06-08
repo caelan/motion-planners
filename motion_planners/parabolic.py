@@ -10,13 +10,15 @@ def check_curve(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
     end_times = np.append(p_curve.x[:1], p_curve.x[-1:])
     v_curve = p_curve.derivative()
     # print()
-    # print(x1, x2, v1, v2, T, a_max)
-    # print([0., T], end_times)
+    #print(x1, x2, v1, v2, T, v_max, a_max)
     # print([x1, x2], [float(p_curve(t)) for t in end_times])
     # print([v1, v2], [float(v_curve(t)) for t in end_times])
-    assert np.allclose([0., T], end_times)
-    assert np.allclose([x1, x2], [float(p_curve(t)) for t in end_times])
-    assert np.allclose([v1, v2], [float(v_curve(t)) for t in end_times])
+    if not np.allclose([0., T], end_times):
+        raise RuntimeError([0., T], end_times)
+    if not np.allclose([x1, x2], [float(p_curve(t)) for t in end_times]):
+        raise RuntimeError([x1, x2], [float(p_curve(t)) for t in end_times])
+    if not np.allclose([v1, v2], [float(v_curve(t)) for t in end_times]):
+        raise RuntimeError([v1, v2], [float(v_curve(t)) for t in end_times])
     # TODO: check v_max, a_max, order, and continuity
 
 ##################################################
@@ -63,9 +65,11 @@ def min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=INF):
     #                  method='interior-point', callback=None, options=None, x0=None)
 
     sign = +1 if a_max >= 0 else -1
+    #a_max = abs(a_max)
     eqn = np.poly1d([
         T ** 2, # a**2
-        sign * (2 * T * (v1 + v2) + 4 * (x1 - x2)), # a
+        #sign * (2 * T * (v1 + v2) + 4 * (x1 - x2)), # a # TODO: sign seems to cause issues
+        (2 * T * (v1 + v2) + 4 * (x1 - x2)),  # a
         -(v2 - v1) ** 2, # 1
     ])
     candidates = []
@@ -78,14 +82,18 @@ def min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=INF):
         vs = v1 + a * ts
         if abs(vs) > abs(v_max):
             continue
+        # vs = a * (-ts) + v2
+        # if abs(vs) > abs(v_max):
+        #     continue
         candidates.append(a)
     if not candidates:
         return None
 
-    a = min(candidates)
+    a = min(candidates, key=lambda a: abs(a))
     ts = (T + (v2 - v1) / a) / 2.
     durations = [ts, T - ts]
-    accels = [sign*a, -sign*a]
+    #accels = [sign*a, -sign*a]
+    accels = [a, -a]
     p_curve = curve_from_controls(durations, accels, t0=0., x0=x1, v0=v1)
     #return p_curve
     check_curve(p_curve, x1, x2, v1, v2, T, v_max=v_max, a_max=a_max)
@@ -157,8 +165,8 @@ def quickest_three_stage(x1, x2, v1, v2, v_max, a_max):
 
 def min_stage(x1, x2, v1, v2, T, v_max=INF, a_max=INF):
     candidates = [
-        min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=v_max),
-        min_two_ramp(x1, x2, v1, v2, T, -a_max, v_max=-v_max),
+        min_two_ramp(x1, x2, v1, v2, T, a_max=a_max, v_max=v_max),
+        min_two_ramp(x1, x2, v1, v2, T, a_max=-a_max, v_max=-v_max),
     ]
     #if v_max != INF:
     candidates.extend([
