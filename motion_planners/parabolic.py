@@ -19,7 +19,13 @@ def check_curve(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
         raise RuntimeError([x1, x2], [float(p_curve(t)) for t in end_times])
     if not np.allclose([v1, v2], [float(v_curve(t)) for t in end_times]):
         raise RuntimeError([v1, v2], [float(v_curve(t)) for t in end_times])
-    # TODO: check v_max, a_max, order, and continuity
+    all_times = p_curve.x
+    if not all(abs(v_curve(t)) <= abs(v_max) for t in all_times):
+        raise RuntimeError(abs(v_max), [abs(v_curve(t)) for t in all_times])
+    a_curve = v_curve.derivative()
+    if not all(abs(a_curve(t)) <= abs(a_max) for t in all_times):
+        raise RuntimeError(abs(a_max), [abs(a_curve(t)) for t in all_times])
+    # TODO: check continuity
 
 ##################################################
 
@@ -65,17 +71,18 @@ def min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=INF):
     #                  method='interior-point', callback=None, options=None, x0=None)
 
     sign = +1 if a_max >= 0 else -1
-    #a_max = abs(a_max)
     eqn = np.poly1d([
         T ** 2, # a**2
-        #sign * (2 * T * (v1 + v2) + 4 * (x1 - x2)), # a # TODO: sign seems to cause issues
-        (2 * T * (v1 + v2) + 4 * (x1 - x2)),  # a
+        sign * (2 * T * (v1 + v2) + 4 * (x1 - x2)),
         -(v2 - v1) ** 2, # 1
     ])
     candidates = []
     for a in np.roots(eqn): # eqn.roots
         if isinstance(a, complex) or (a == 0):
             continue
+        if abs(a) >= abs(a_max):
+            continue
+        a = sign*a
         ts = (T + (v2 - v1) / a) / 2.
         if not (0 <= ts <= T):
             continue
@@ -92,7 +99,7 @@ def min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=INF):
     a = min(candidates, key=lambda a: abs(a))
     ts = (T + (v2 - v1) / a) / 2.
     durations = [ts, T - ts]
-    #accels = [sign*a, -sign*a]
+    #accels = [sign*abs(a), -sign*abs(a)]
     accels = [a, -a]
     p_curve = curve_from_controls(durations, accels, t0=0., x0=x1, v0=v1)
     #return p_curve
@@ -164,6 +171,11 @@ def quickest_three_stage(x1, x2, v1, v2, v_max, a_max):
 ##################################################
 
 def min_stage(x1, x2, v1, v2, T, v_max=INF, a_max=INF):
+    if (v1 == 0) and (v2 == 0):
+        spline = opt_straight_line(x1, x2, v_max=v_max, a_max=a_max)
+        print(spline.x[-1], T)
+
+
     candidates = [
         min_two_ramp(x1, x2, v1, v2, T, a_max=a_max, v_max=v_max),
         min_two_ramp(x1, x2, v1, v2, T, a_max=-a_max, v_max=-v_max),

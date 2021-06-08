@@ -4,8 +4,8 @@ from motion_planners.tkinter.limits import find_max_velocity, find_max_accelerat
 from motion_planners.utils import get_distance, INF
 
 
-V_MAX = 5.*np.ones(2)
-A_MAX = V_MAX / 2.
+V_MAX = 1.*np.ones(2)
+A_MAX = (V_MAX - 0.) / (0.5 - 0.)
 #V_MAX = INF*np.ones(2)
 #A_MAX = 1e6*np.ones(2)
 

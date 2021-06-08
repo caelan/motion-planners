@@ -1,6 +1,6 @@
 import numpy as np
 
-from motion_planners.utils import INF, get_pairs
+from motion_planners.utils import INF, get_pairs, find
 
 
 def check_time(t):
@@ -54,8 +54,16 @@ def append_polys(poly1, *polys):
     return total_poly
 
 
+def spline_start(spline):
+    return spline.x[0]
+
+
+def spline_end(spline):
+    return spline.x[-1]
+
+
 def spline_duration(spline):
-    return spline.x[-1] - spline.x[0]
+    return spline_end(spline) - spline_start(spline)
 
 ##################################################
 
@@ -142,14 +150,47 @@ def min_linear_spline(x1, x2, v_max, a_max, t0=0.):
     # spline = PPoly(c=c, x=times) # TODO: extend
     return spline
 
+def crop_poly(poly, t1=None, t2=None):
+    from scipy.interpolate import PPoly
+    print(t1, t2)
+    if t1 is None:
+        t1 = spline_start(poly)
+    if t2 is None:
+        t2 = spline_end(poly)
+    assert t1 <= t2
+    times = poly.x
+    i1 = find(lambda i: times[i] >= t1, range(len(times)))
+    i2 = find(lambda i: times[i] <= t2, reversed(range(len(times))))
+    print(i1, i2)
+    print(([t1] + poly.x[i1+1:i2] + [t2]).shape)
+    print(poly.c[:,i1-1:i2+1,...].shape)
+    # TODO: the adjusting of the center is a headache
+    return PPoly(c=poly.c[:,i1:i2+1,...],
+                 x=[t1] + poly.x[i1+1:i2] + [t2])
 
 class MultiPPoly(object):
     def __init__(self, polys):
         self.polys = list(polys)
         self.x = sorted(np.concatenate([poly.x for poly in self.polys]))
         self.x = [self.x[0]] + [x2 for x1, x2 in get_pairs(self.x) if x2 > x1]
+        # TODO: cache derivatives
+    @property
+    def d(self):
+        return len(self.polys)
+    @property
+    def start_x(self):
+        return spline_start(self)
+    @property
+    def end_(self):
+        return spline_end(self)
     def __call__(self, *args, **kwargs):
         return np.array([poly(*args, **kwargs) for poly in self.polys])
+    @staticmethod
+    def concatenate(self, polys):
+        raise NotImplementedError()
+        #return MultiPPoly()
+    # def slice(self, start, stop=None):
+    #     raise NotImplementedError()
     # TODO: extend
     def derivative(self, *args, **kwargs):
         return MultiPPoly([poly.derivative(*args, **kwargs) for poly in self.polys])
@@ -170,4 +211,4 @@ class MultiPPoly(object):
         velocities = [derivative(x) for x in times]
         return CubicHermiteSpline(times, positions, dydx=velocities, **kwargs)
     def __str__(self):
-        return '{}()'.format(self.__class__.__name__, *self.polys)
+        return '{}({})'.format(self.__class__.__name__, self.polys)
