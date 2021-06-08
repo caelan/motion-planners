@@ -41,6 +41,21 @@ def zero_two_ramp(x1, x2, T, a_max):
     # total_accel = p_curve.integrate(p_curve.x[0], p_curve.x[-1])
     return p_curve
 
+def zero_three_stage(x1, x2, T, a_max=INF):
+    sign = get_sign(x2 - x1)
+    d = abs(x2 - x1)
+    solutions = np.roots([
+        a_max,
+        -a_max*T,
+        d,
+    ])
+    t1 = t3 = min(t for t in solutions if (T - 2*t) >= 0)
+    t2 = T - t1 - t3 # Lower velocity
+    durations = [t1, t2, t3]
+    accels = [sign * a_max, 0., -sign * a_max]
+    p_curve = curve_from_controls(durations, accels, x0=x1)
+    return p_curve
+
 def opt_straight_line(x1, x2, T_min=0., v_max=INF, a_max=INF):
     # TODO: solve for a given T which is higher than the min T
     # TODO: solve for all joints at once using a linear interpolator
@@ -69,17 +84,7 @@ def opt_straight_line(x1, x2, T_min=0., v_max=INF, a_max=INF):
 
     assert T_min <= T
     T = max(T_min, T)
-    solutions = np.roots([
-        a_max,
-        -a_max*T,
-        d,
-    ])
-    t1 = t3 = min(t for t in solutions if (T - 2*t) >= 0)
-    t2 = T - t1 - t3 # Lower velocity
-    #return T
-    durations = [t1, t2, t3]
-    accels = [sign * a_max, 0., -sign * a_max]
-    p_curve = curve_from_controls(durations, accels, x0=x1)
+    p_curve = zero_three_stage(x1, x2, T, a_max=a_max)
     check_curve(p_curve, x1, x2, v1=0., v2=0., T=T, v_max=v_max, a_max=a_max)
     return p_curve
 
