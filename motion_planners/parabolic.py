@@ -3,27 +3,50 @@ import math
 import numpy as np
 
 from motion_planners.retime import curve_from_controls, parabolic_val, check_time
-from motion_planners.utils import INF
+from motion_planners.utils import INF, get_sign
 
-def solve_zero_ramp(x1, x2, v_max=INF, a_max=INF):
+def opt_straight_line(x1, x2, v_max=INF, a_max=INF):
     assert (v_max >= 0) and (a_max >= 0)
+    sign = get_sign(x2 - x1)
     #v_max = abs(x2 - x1) / abs(v_max)
     d = abs(x2 - x1)
     t_accel = math.sqrt(d / a_max) # 1/2.*a*t**2 = d/2.
     if a_max*t_accel <= v_max:
-        T = 2*t_accel
-        return T
+        #T = 2*t_accel
+        #return T
+        durations = [t_accel, t_accel]
+        accels = [sign * a_max, -sign * a_max]
+        p_curve = curve_from_controls(durations, accels, x0=x1)
+        return p_curve
+
     t1 = t3 = (v_max - 0) / a_max
     t2 = (d - 2 * parabolic_val(t1, a=a_max)) / v_max
-    T = t1 + t2 + t3
-    return T
+    #T = t1 + t2 + t3
+    #return T
+    durations = [t1, t2, t3]
+    accels = [sign * a_max, 0., -sign * a_max]
+    p_curve = curve_from_controls(durations, accels, x0=x1)
+    return p_curve
 
 
-def shortest_inf_accel(x1, x2, v_max=INF):
+def quickest_inf_accel(x1, x2, v_max=INF):
     #return solve_zero_ramp(x1, x2, v_max=INF)
     return abs(x2 - x1) / abs(v_max)
 
 ##################################################
+
+def check(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
+    end_times = np.append(p_curve.x[:1], p_curve.x[-1:])
+    v_curve = p_curve.derivative()
+    # print()
+    # print(x1, x2, v1, v2, T, a_max)
+    # print([0., T], end_times)
+    # print([x1, x2], [float(p_curve(t)) for t in end_times])
+    # print([v1, v2], [float(v_curve(t)) for t in end_times])
+    assert np.allclose([0., T], end_times)
+    assert np.allclose([x1, x2], [float(p_curve(t)) for t in end_times])
+    assert np.allclose([v1, v2], [float(v_curve(t)) for t in end_times])
+    # TODO: check v_max, a_max, order, and continuity
 
 def min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=INF):
     # from numpy.linalg import solve
@@ -31,8 +54,6 @@ def min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=INF):
     # result = linprog(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None, bounds=None,
     #                  method='interior-point', callback=None, options=None, x0=None)
 
-    print()
-    print(x1, x2, v1, v2, T, a_max)
     sign = +1 if a_max >= 0 else -1
     eqn = np.poly1d([
         T ** 2, # a**2
@@ -59,18 +80,10 @@ def min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=INF):
     accels = [sign*a, -sign*a]
     p_curve = curve_from_controls(durations, accels, t0=0., x0=x1, v0=v1)
     #return p_curve
-
-    end_times = np.append(p_curve.x[:1], p_curve.x[-1:])
-    v_curve = p_curve.derivative()
-    # print([0., T], end_times)
-    # print([x1, x2], [float(p_curve(t)) for t in end_times])
-    # print([v1, v2], [float(v_curve(t)) for t in end_times])
-    assert np.allclose([0., T], end_times)
-    assert np.allclose([x1, x2], [float(p_curve(t)) for t in end_times])
-    assert np.allclose([v1, v2], [float(v_curve(t)) for t in end_times])
+    check(p_curve, x1, x2, v1, v2, T, v_max=v_max, a_max=a_max)
     return p_curve
 
-def solve_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
+def quickest_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
     #optimize_two_ramp(x1, x2, v1, v2, a_max)
     solutions = np.roots([
         a_max, # t**2
@@ -96,26 +109,36 @@ def solve_two_ramp(x1, x2, v1, v2, a_max, v_max=INF):
 
 ##################################################
 
-def min_three_ramp(x1, x2, v1, v2, v_max, a_max, T):
-    #print(tp1, tp2, tl)
-    a = (v_max**2 - abs(v_max)*(v1 + v2) + (v1**2 + v2**2)/2) / (T*abs(v_max) - (x2 - x1))
+def solve_three_stage(x1, x2, v1, v2, v_max, a):
     tp1 = (v_max - v1) / a
+    tl = (v2 ** 2 + v1 ** 2 - 2 * v_max ** 2) / (2 * v_max * a) \
+         + (x2 - x1) / v_max
     tp2 = (v2 - v_max) / a
-    tl = (v2 ** 2 + v1 ** 2 - 2 * abs(v_max) ** 2) / (2 * v_max * a) + (x2 - x1) / v_max
-    print(tp1, tp2, tl)
-    input()
+    return tp1, tl, tp2
 
 
-def solve_three_ramp(x1, x2, v1, v2, v_max, a_max):
+def min_three_stage(x1, x2, v1, v2, v_max, a_max, T):
+    #print(tp1, tp2, tl)
+
+    a = (v_max**2 - v_max*(v1 + v2) + (v1**2 + v2**2)/2) \
+        / (T*abs(v_max) - (x2 - x1))
+    assert abs(a) <= abs(a_max)
+    durations = solve_three_stage(x1, x2, v1, v2, v_max, a)
+    if any(t < 0 for t in durations):
+        return None
+    accels = [a, 0., -a]
+    p_curve = curve_from_controls(durations, accels, t0=0., x0=x1, v0=v1)
+    check(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF)
+    return p_curve
+
+
+def quickest_three_stage(x1, x2, v1, v2, v_max, a_max):
     # http://motion.pratt.duke.edu/papers/icra10-smoothing.pdf
     # https://github.com/Puttichai/parabint/blob/2662d4bf0fbd831cdefca48863b00d1ae087457a/parabint/optimization.py
     # TODO: minimum-switch-time constraint
     #assert np.positive(v_max).all() and np.positive(a_max).all()
     # P+L+P-
-    tp1 = (v_max - v1) / a_max
-    tp2 = (v2 - v_max) / a_max
-    tl = (v2 ** 2 + v1 ** 2 - 2 * abs(v_max) ** 2) / (2 * v_max * a_max) + (x2 - x1) / v_max
-    ts = [tp1, tl, tp2]
+    ts = solve_three_stage(x1, x2, v1, v2, v_max, a_max)
     if any(t < 0 for t in ts):
         return None
     T = sum(ts)
@@ -124,7 +147,7 @@ def solve_three_ramp(x1, x2, v1, v2, v_max, a_max):
 
 ##################################################
 
-def solve_ramp(x1, x2, v1, v2, v_max=INF, a_max=INF, min_t=0.):
+def quickest_stage(x1, x2, v1, v2, v_max=INF, a_max=INF, min_t=0.):
     # TODO: handle infinite acceleration
     assert (v_max >= 0.) and (a_max >= 0.)
     assert all(abs(v) <= v_max for v in [v1, v2])
@@ -132,17 +155,17 @@ def solve_ramp(x1, x2, v1, v2, v_max=INF, a_max=INF, min_t=0.):
         T = 0
         return min(min_t, T) # TODO: throw an error
     if a_max == INF:
-        T = shortest_inf_accel(x1, x2, v_max=v_max)
+        T = quickest_inf_accel(x1, x2, v_max=v_max)
         return min(min_t, T)
 
     candidates = [
-        solve_two_ramp(x1, x2, v1, v2, a_max, v_max=v_max),
-        solve_two_ramp(x1, x2, v1, v2, -a_max, v_max=-v_max),
+        quickest_two_ramp(x1, x2, v1, v2, a_max, v_max=v_max),
+        quickest_two_ramp(x1, x2, v1, v2, -a_max, v_max=-v_max),
     ]
     if v_max != INF:
         candidates.extend([
-            solve_three_ramp(x1, x2, v1, v2, v_max, a_max),
-            solve_three_ramp(x1, x2, v1, v2, -v_max, -a_max),
+            quickest_three_stage(x1, x2, v1, v2, v_max, a_max),
+            quickest_three_stage(x1, x2, v1, v2, -v_max, -a_max),
         ])
     candidates = [t for t in candidates if t is not None]
     assert candidates
@@ -154,7 +177,7 @@ def solve_ramp(x1, x2, v1, v2, v_max=INF, a_max=INF, min_t=0.):
 
 def solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max):
     d = len(x1)
-    durations = [solve_ramp(x1[i], x2[i], v1[i], v2[i], v_max[i], a_max[i]) for i in range(d)]
+    durations = [quickest_stage(x1[i], x2[i], v1[i], v2[i], v_max[i], a_max[i]) for i in range(d)]
     # if any(t is None for t in durations):
     #     return None
     durations = [t for t in durations if t is not None]

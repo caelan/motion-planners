@@ -137,7 +137,7 @@ def find(test, sequence):
     raise RuntimeError()
 
 
-def sign(x):
+def get_sign(x):
     if x > 0:
         return +1
     if x < 0:

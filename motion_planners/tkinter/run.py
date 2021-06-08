@@ -5,11 +5,11 @@ import argparse
 import time
 import random
 
-from motion_planners.parabolic import solve_zero_ramp
-from motion_planners.retime import conservative
-from motion_planners.tkinter.discretize import time_discretize_curve, V_MAX, A_MAX
-from motion_planners.tkinter.limits import get_max_velocity
-from motion_planners.tkinter.smooth import smooth
+from ..parabolic import opt_straight_line
+from ..retime import min_linear_spline, spline_duration
+from .discretize import time_discretize_curve, V_MAX, A_MAX
+from .limits import get_max_velocity
+from .smooth import smooth
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn
 from .viewer import create_box, draw_environment, add_points, \
     add_roadmap, get_box_center, add_path, create_cylinder
@@ -45,17 +45,14 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     waypoints = remove_redundant(path)
     waypoints = waypoints_from_path(waypoints)
     #durations = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
-    durations = [0.] + [max(conservative(x1[k], x2[k], v_max=v_max[k], a_max=a_max[k]) for k in range(d))
-                        for x1, x2 in get_pairs(waypoints)] # solve_zero_ramp | conservative
-    print(durations)
-    durations = [0.] + [max(solve_zero_ramp(x1[k], x2[k], v_max=v_max[k], a_max=a_max[k]) for k in range(d))
-                        for x1, x2 in get_pairs(waypoints)] # solve_zero_ramp | conservative
-    print(durations)
+    durations = [0.] + [max(spline_duration(opt_straight_line(x1[k], x2[k], v_max=v_max[k], a_max=a_max[k])) for k in range(d))
+                        for x1, x2 in get_pairs(waypoints)] # min_linear_spline | opt_straight_line
     #durations = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
     #                     for x1, x2 in get_pairs(waypoints)]
 
     times = np.cumsum(durations)
     velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
+
     positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
     #positions_curve = interp1d(times, waypoints, kind='quadratic', axis=0) # Cannot differentiate
 
