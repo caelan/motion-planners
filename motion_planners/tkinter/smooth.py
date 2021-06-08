@@ -78,7 +78,7 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
         # ts = [times[0], times[-1]]
         # t1, t2 = positions_curve.x[0], positions_curve.x[-1]
         t1, t2 = np.random.uniform(times[0], times[-1], 2)
-        if t1 > t2:
+        if t1 > t2: # TODO: minimum distance from a knot
             t1, t2 = t2, t1
         #print(crop_poly(positions_curve.polys[0], t1, t2))
 
@@ -104,7 +104,7 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
         best_t = solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max)
         if (best_t is None) or (best_t > max_t):
             continue
-        best_t += 1e-3
+        #best_t += 1e-3
         #assert best_t is not None
         #print(min_t, best_t, max_t)
 
@@ -122,10 +122,16 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
                                                positions=spliced_positions, velocities=spliced_velocities,
                                                v_max=v_max, a_max=a_max)
         if (new_positions_curve is None) or (spline_duration(new_positions_curve) > max_t):
+            print(new_positions_curve)
             continue
-        if not check_spline(new_positions_curve, v_max, a_max):
-            continue
-        print(new_positions_curve.hermite_spline().c[0,...])
+        print(new_positions_curve.x[-1], max_t, new_positions_curve.x[-1] < max_t)
+        # if not check_spline(new_positions_curve, v_max, a_max):
+        #     continue
+        _, samples = time_discretize_curve(new_positions_curve, max_velocities=v_max)
+        if any(map(collision_fn, samples)):
+           continue
+
+        #print(new_positions_curve.hermite_spline().c[0,...])
 
         # new_positions_curve = MultiPPoly(start_positions_curve.polys[:i1+1] +
         #                                  new_positions_curve.polys +
@@ -148,11 +154,12 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
 
         # TODO: splice in the new segment
         #new_positions_curve = CubicSpline(new_times, new_positions)
-        new_positions_curve = CubicHermiteSpline(new_times, new_positions, dydx=new_velocities)
-        # new_positions_curve = solve_multi_poly(new_times, new_positions, new_velocities, v_max, a_max)
+        #new_positions_curve = CubicHermiteSpline(new_times, new_positions, dydx=new_velocities)
+        new_positions_curve = solve_multi_poly(new_times, new_positions, new_velocities, v_max, a_max)
         if new_positions_curve is None:
+            print(new_positions_curve)
             continue
-        print(new_positions_curve.c[0,...])
+        #print(new_positions_curve.c[0,...])
 
         print('Iterations: {} | Current time: {:.3f} | New time: {:.3f} | Elapsed time: {:.3f}'.format(
             iteration, positions_curve.x[-1], new_positions_curve.x[-1], elapsed_time(start_time)))
@@ -170,8 +177,8 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
 
         _, samples = time_discretize_curve(new_positions_curve, max_velocities=v_max)
         #_, samples = time_discretize_curve(new_positions_curve, start_t=new_times[i1+1], end_t=new_times[-(len(times) - i2 + 1)])
-        if any(map(collision_fn, samples)):
-            continue
+        # if any(map(collision_fn, samples)):
+        #    continue
         positions_curve = new_positions_curve
     print('Iterations: {} | Start time: {:.3f} | End time: {:.3f} | Elapsed time: {:.3f}'.format(
         num, start_positions_curve.x[-1], positions_curve.x[-1], elapsed_time(start_time)))

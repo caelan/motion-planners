@@ -75,7 +75,7 @@ def check_spline(spline, v_max=None, a_max=None, start=None, end=None):
 
 ##################################################
 
-def optimize(objective, lower, upper, num=10, max_time=INF, verbose=False, **kwargs):
+def optimize(objective, lower, upper, num=100, max_time=INF, max_iterations=100, verbose=False, **kwargs):
     # https://www.cvxpy.org/examples/basic/socp.html
     from scipy.optimize import minimize #, line_search, brute, basinhopping, minimize_scalar
     start_time = time.time()
@@ -85,11 +85,16 @@ def optimize(objective, lower, upper, num=10, max_time=INF, verbose=False, **kwa
         if elapsed_time(start_time) >= max_time:
             break
         x0 = np.random.uniform(lower, upper)
-        result = minimize(objective, x0=x0, bounds=bounds, **kwargs) # method=None, jac=None,
-        if result.fun < best_f:
-            best_t, best_f = result.x, result.fun
+        if max_iterations is None:
+            t, f = x0, objective(x0)
+        else:
+            result = minimize(objective, x0=x0, bounds=bounds, # maxiter=max_iterations,
+                              **kwargs) # method=None, jac=None,
+            t, f = result.x, result.fun
+        if f < best_f:
+            best_t, best_f = t, f
             if verbose:
-                print(iteration, x0, result.x, result.fun) # objective(result.x)
+                print(iteration, x0, t, f) # objective(result.x)
     return best_t, best_f
 
 def find_max_curve(curve, start_t=None, end_t=None, norm=INF, **kwargs):
@@ -142,5 +147,5 @@ def find_max_velocity(positions_curve, **kwargs):
 
 def find_max_acceleration(positions_curve, **kwargs):
     accelerations_curve = positions_curve.derivative(nu=2)
-    #return find_max_curve(accelerations_curve, **kwargs)
-    return maximize_curve(accelerations_curve)
+    return find_max_curve(accelerations_curve, max_iterations=None, **kwargs)
+    #return maximize_curve(accelerations_curve)

@@ -219,11 +219,12 @@ def quickest_three_stage(x1, x2, v1, v2, v_max, a_max):
 
 def min_stage(x1, x2, v1, v2, T, v_max=INF, a_max=INF):
     # if (v1 == 0.) and (v2 == 0.):
+    #     # TODO: isn't necessarily a straight line in multi-dimensions
     #     candidates = [
     #         zero_two_ramp(x1, x2, T, v_max=v_max, a_max=a_max),
     #         zero_three_stage(x1, x2, T, v_max=v_max, a_max=a_max),
     #     ]
-    #     print(candidates)
+    # else:
     candidates = [
         min_two_ramp(x1, x2, v1, v2, T, a_max=a_max, v_max=v_max),
         min_two_ramp(x1, x2, v1, v2, T, a_max=-a_max, v_max=-v_max),
@@ -256,8 +257,8 @@ def solve_multi_poly(times, positions, velocities, v_max, a_max, **kwargs):
     assert len(positions[0]) == len(velocities[0])
     positions = np.array(positions)
     velocities = np.array(velocities)
-    positions_curves = [min_spline(times, positions[:, i], velocities[:, i], v_max=v_max[i], a_max=a_max[i], **kwargs)
-                        for i in range(d)]
+    positions_curves = [min_spline(times, positions[:, i], velocities[:, i],
+                                   v_max=v_max[i], a_max=a_max[i], **kwargs) for i in range(d)]
     if any(position_curve is None for position_curve in positions_curves):
         return None
     return MultiPPoly(positions_curves)

@@ -38,8 +38,8 @@ def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocit
     resolutions = resolution*np.ones(d)
     if max_velocities is None:
         # TODO: adjust per trajectory segment
-        v_max_t, max_v = find_max_velocity(positions_curve, start_t=start_t, end_t=end_t, norm=norm, num=100)
-        a_max_t, max_a = find_max_acceleration(positions_curve, start_t=start_t, end_t=end_t, norm=norm, num=100)
+        v_max_t, max_v = find_max_velocity(positions_curve, start_t=start_t, end_t=end_t, norm=norm)
+        a_max_t, max_a = find_max_acceleration(positions_curve, start_t=start_t, end_t=end_t, norm=norm)
         #v_max_t, max_v = INF, np.linalg.norm(V_MAX)
         time_step = resolution / max_v
         print('Max velocity: {:.3f}/{:.3f} (at time {:.3f}) | Max accel: {:.3f}/{:.3f} (at time {:.3f}) | '

@@ -67,15 +67,14 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
 
     positions_curve = solve_multi_poly(times, waypoints, velocities, v_max, a_max)
     #positions_curve = positions_curve.spline()
-    positions_curve = positions_curve.hermite_spline()
-    print(positions_curve.c[0, ...])
-    print(positions_curve.c.shape)
-    return
+    #positions_curve = positions_curve.hermite_spline()
+    # print(positions_curve.c[0, ...]) # Cubic parameters
+    # print(positions_curve.c.shape)
 
-    positions_curve = smooth_curve(positions_curve,
-                                   #v_max=None, a_max=None,
-                                   v_max=v_max, a_max=a_max,
-                                   **kwargs)
+    # positions_curve = smooth_curve(positions_curve,
+    #                                #v_max=None, a_max=None,
+    #                                v_max=v_max, a_max=a_max,
+    #                                **kwargs)
 
     return positions_curve
 
@@ -117,11 +116,12 @@ def main():
     #########################
 
     obstacles = [
-        create_box(center=(.35, .75), extents=(.25, .25)),
-        create_box(center=(.75, .35), extents=(.25, .25)),
-        #create_box(center=(.75, .35), extents=(.225, .225)),
-        create_box(center=(.5, .5), extents=(.25, .25)),
-        #create_box(center=(.5, .5), extents=(.225, .225)),
+        # create_box(center=(.35, .75), extents=(.25, .25)),
+        # create_box(center=(.75, .35), extents=(.25, .25)),
+        # #create_box(center=(.75, .35), extents=(.225, .225)),
+        # create_box(center=(.5, .5), extents=(.25, .25)),
+        # #create_box(center=(.5, .5), extents=(.225, .225)),
+
         create_cylinder(center=(.25, .25), radius=.1),
     ]
 
