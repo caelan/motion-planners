@@ -271,9 +271,7 @@ def solve_multi_linear(positions, v_max, a_max, **kwargs):
         difference = np.subtract(x2, x1) # TODO: pass if too small
         unit_v_max = min(np.divide(v_max, np.absolute(difference)))
         unit_a_max = min(np.divide(a_max, np.absolute(difference)))
-        unit_x1 = 0.
-        unit_x2 = 1.
-        curve = opt_straight_line(unit_x1, unit_x2, v_max=unit_v_max, a_max=unit_a_max)
+        curve = opt_straight_line(x1=0., x2=1., v_max=unit_v_max, a_max=unit_a_max)
         c = np.zeros(curve.c.shape + (d,))
         for k in range(d):
             c[:,:,k] = difference[k]*curve.c

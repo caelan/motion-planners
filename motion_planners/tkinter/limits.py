@@ -75,7 +75,7 @@ def check_spline(spline, v_max=None, a_max=None, start=None, end=None):
 
 ##################################################
 
-def optimize(objective, lower, upper, num=100, max_time=INF, max_iterations=100, verbose=False, **kwargs):
+def minimize_objective(objective, lower, upper, num=100, max_time=INF, max_iterations=100, verbose=False, **kwargs):
     # https://www.cvxpy.org/examples/basic/socp.html
     from scipy.optimize import minimize #, line_search, brute, basinhopping, minimize_scalar
     start_time = time.time()
@@ -91,7 +91,7 @@ def optimize(objective, lower, upper, num=100, max_time=INF, max_iterations=100,
             result = minimize(objective, x0=x0, bounds=bounds, # maxiter=max_iterations,
                               **kwargs) # method=None, jac=None,
             t, f = result.x, result.fun
-        if f < best_f:
+        if (best_t is None) or (f < best_f):
             best_t, best_f = t, f
             if verbose:
                 print(iteration, x0, t, f) # objective(result.x)
@@ -102,15 +102,16 @@ def find_max_curve(curve, start_t=None, end_t=None, norm=INF, **kwargs):
         start_t = curve.x[0]
     if end_t is None:
         end_t = curve.x[-1]
-    objective = lambda t: -np.linalg.norm(curve(t), ord=norm) # 2 | INF
-    #objective = lambda t: -np.linalg.norm(curve(t), norm=2)**2 # t[0]
+    # TODO: curve(t) returns a matrix if passed a vector, which is summed by the INF norm
+    objective = lambda t: -np.linalg.norm(curve(t[0]), ord=norm) # 2 | INF
+    #objective = lambda t: -np.linalg.norm(curve(t[0]), norm=2)**2 # t[0]
     #accelerations_curve = positions_curve.derivative() # TODO: ValueError: failed in converting 7th argument `g' of _lbfgsb.setulb to C/Fortran array
     #grad = lambda t: np.array([-2*sum(accelerations_curve(t))])
     #result = minimize_scalar(objective, method='bounded', bounds=(start_t, end_t)) #, options={'disp': False})
 
     #print(max(-objective(t) for t in curve.x))
-    best_t, best_f = optimize(objective, lower=[start_t], upper=[end_t], **kwargs)
-    best_f = objective(best_t)
+    best_t, best_f = minimize_objective(objective, lower=[start_t], upper=[end_t], **kwargs)
+    #best_f = objective(best_t)
     best_t, best_f = best_t[0], -best_f
     return best_t, best_f
 
@@ -147,5 +148,5 @@ def find_max_velocity(positions_curve, **kwargs):
 
 def find_max_acceleration(positions_curve, **kwargs):
     accelerations_curve = positions_curve.derivative(nu=2)
-    return find_max_curve(accelerations_curve, max_iterations=None, **kwargs)
-    #return maximize_curve(accelerations_curve)
+    #return find_max_curve(accelerations_curve, max_iterations=None, **kwargs)
+    return maximize_curve(accelerations_curve)

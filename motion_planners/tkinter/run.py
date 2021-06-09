@@ -43,6 +43,7 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     # v_max = 5.*np.ones(d)
     # a_max = v_max / 1.
     v_max, a_max = V_MAX, A_MAX
+    print('Max vel: {} | Max accel: {}'.format(v_max, a_max))
 
     waypoints = remove_redundant(path)
     waypoints = waypoints_from_path(waypoints)
@@ -59,18 +60,21 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     # min_t = 1e-2
     # durations = np.maximum(min_t*np.ones(len(durations)), durations)
 
-    times = np.cumsum(durations)
+    #times = np.cumsum(durations)
     #positions_curve = interp1d(times, waypoints, kind='quadratic', axis=0) # linear | slinear | quadratic | cubic
     #positions_curve = CubicSpline(times, waypoints, bc_type='clamped')
-    velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
+    #velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
     #positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
 
     positions_curve = solve_multi_linear(waypoints, v_max, a_max)
     #positions_curve = solve_multi_poly(times, waypoints, velocities, v_max, a_max)
     #positions_curve = positions_curve.spline()
     #positions_curve = positions_curve.hermite_spline()
-    print(positions_curve.c[0, ...]) # Cubic parameters
+
+    #print(positions_curve.c[0, ...]) # Cubic parameters
     # print(positions_curve.c.shape)
+    # for d in range(positions_curve.c.shape[-1]):
+    #     print(d, positions_curve.c[..., d])
 
     # positions_curve = smooth_curve(positions_curve,
     #                                #v_max=None, a_max=None,
