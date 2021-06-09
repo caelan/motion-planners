@@ -7,13 +7,13 @@ import random
 import sys
 
 from ..parabolic import solve_multi_poly,  opt_straight_line, solve_multivariate_ramp, solve_multi_linear
-from ..retime import spline_duration
+from ..retime import spline_duration, trim, trim_end, trim_start
 from .discretize import time_discretize_curve, V_MAX, A_MAX
 from .limits import get_max_velocity
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn
 from .smooth import smooth_curve
 from .viewer import create_box, draw_environment, add_points, \
-    add_roadmap, get_box_center, add_path, create_cylinder
+    add_roadmap, get_box_center, add_path, create_cylinder, add_timed_path
 from ..utils import user_input, profiler, INF, compute_path_cost, elapsed_time, get_pairs, \
     remove_redundant, waypoints_from_path
 from ..prm import prm
@@ -75,6 +75,15 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     # print(positions_curve.c.shape)
     # for d in range(positions_curve.c.shape[-1]):
     #     print(d, positions_curve.c[..., d])
+
+    t1, t2 = np.random.uniform(positions_curve.x[0], positions_curve.x[-1], 2)
+    if t1 > t2:
+        t1, t2 = t2, t1
+    print(t1, t2)
+    print([positions_curve(t) for t in [t1, t2]])
+    positions_curve = trim(positions_curve, t1, t2) # trim | trim_start | trim_end
+    print(positions_curve.x)
+    print([positions_curve(t) for t in [t1, t2]])
 
     # positions_curve = smooth_curve(positions_curve,
     #                                #v_max=None, a_max=None,
@@ -211,9 +220,10 @@ def main():
                 add_path(viewer, path, color='green')
                 #curve = interpolate_path(path) # , collision_fn=collision_fn)
                 curve = retime_path(path, collision_fn=collision_fn)
-                _, path = time_discretize_curve(curve)
+                times, path = time_discretize_curve(curve)
                 #add_points(viewer, [curve(t) for t in curve.x])
                 add_path(viewer, path, color='red')
+                #add_timed_path(viewer, times, path) # TODO: add curve
 
             if args.smooth:
                 for path in paths:

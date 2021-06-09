@@ -155,9 +155,30 @@ def add_segments(viewer, segments, step_size=INF, **kwargs):
             viewer.draw_point(p, radius=2, **kwargs)
 
 def add_path(viewer, path, **kwargs):
-    # TODO: color based on time
     segments = list(get_pairs(path))
     return add_segments(viewer, segments, **kwargs)
+
+def hex_from_8bit(rgb):
+    assert all(0 <= v <= 2**8-1 for v in rgb)
+    return '#%02x%02x%02x' % tuple(rgb)
+
+def hex_from_rgb(rgb):
+    assert all(0. <= v <= 1.for v in rgb)
+    return hex_from_8bit([int(v*(2**8-1)) for v in rgb])
+
+def spaced_colors(n, s=1, v=1):
+    import colorsys
+    return [colorsys.hsv_to_rgb(h, s, v) for h in np.linspace(0, 1, n, endpoint=False)]
+
+def add_timed_path(viewer, times, path, **kwargs):
+    # TODO: color based on velocity
+    import colorsys
+    for (t1, p1), (t2, p2) in get_pairs(list(zip(times, path))):
+        t = (t1 + t2) / 2
+        fraction = (t - times[0]) / (times[-1] - times[0])
+        rgb = colorsys.hsv_to_rgb(h=fraction, s=1., v=1.)
+        line = (p1, p2)
+        viewer.draw_line(line, color=hex_from_rgb(rgb), **kwargs)
 
 def draw_solution(segments, obstacles, regions):
     viewer = draw_environment(obstacles, regions)

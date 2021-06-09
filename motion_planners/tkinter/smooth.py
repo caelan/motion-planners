@@ -6,7 +6,7 @@ import numpy as np
 from motion_planners.tkinter.limits import check_spline
 from motion_planners.tkinter.discretize import time_discretize_curve
 from motion_planners.parabolic import solve_multi_poly, MultiPPoly, solve_multivariate_ramp
-from motion_planners.retime import crop_poly, spline_duration
+from motion_planners.retime import trim, spline_duration
 from motion_planners.utils import INF, elapsed_time, get_pairs, find
 
 def find_lower_bound(x1, x2, v1=None, v2=None, v_max=None, a_max=None):

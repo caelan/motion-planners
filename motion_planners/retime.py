@@ -151,23 +151,54 @@ def min_linear_spline(x1, x2, v_max, a_max, t0=0.):
     # spline = PPoly(c=c, x=times) # TODO: extend
     return spline
 
-def crop_poly(poly, t1=None, t2=None):
+##################################################
+
+def trim_end(poly, end):
     from scipy.interpolate import PPoly
-    print(t1, t2)
-    if t1 is None:
-        t1 = spline_start(poly)
-    if t2 is None:
-        t2 = spline_end(poly)
-    assert t1 <= t2
     times = poly.x
-    i1 = find(lambda i: times[i] >= t1, range(len(times)))
-    i2 = find(lambda i: times[i] <= t2, reversed(range(len(times))))
-    print(i1, i2)
-    print(([t1] + poly.x[i1+1:i2] + [t2]).shape)
-    print(poly.c[:,i1-1:i2+1,...].shape)
-    # TODO: the adjusting of the center is a headache
-    return PPoly(c=poly.c[:,i1:i2+1,...],
-                 x=[t1] + poly.x[i1+1:i2] + [t2])
+    if end >= times[-1]:
+        return poly
+    if end <= times[0]:
+        return None
+    last = find(lambda i: times[i] <= end, reversed(range(len(times))))
+    times = list(times[:last+1]) + [end]
+    c = poly.c[:,:last+1,...]
+    return PPoly(c=c, x=times)
+
+def trim_start(poly, start):
+    from scipy.interpolate import PPoly, CubicHermiteSpline #, BPoly
+    #PPoly.from_bernstein_basis
+    #BPoly.from_derivatives
+    times = poly.x
+    if start <= times[0]:
+        return poly
+    if start >= times[-1]:
+        return None
+
+    first = find(lambda i: times[i] >= start, range(len(times)))
+    ts = [start, times[first]] # + start) / 2.]
+    ps = [poly(t) for t in ts]
+    derivative = poly.derivative()
+    vs = [derivative(t) for t in ts]
+    correction = CubicHermiteSpline(ts, ps, dydx=vs)
+
+    times = [start] + list(times[first:])
+    c = poly.c[:,first-1:,...]
+    c[:,0,...] = correction.c[-poly.c.shape[0]:,0,...]
+    poly = PPoly(c=c, x=times)
+    return poly
+
+def trim(poly, start=None, end=None):
+    if end is None:
+        end = spline_end(poly)
+    assert start <= end
+    poly = trim_end(poly, end)
+    if start is None:
+        start = spline_start(poly)
+    poly = trim_start(poly, start)
+    return poly
+
+##################################################
 
 class MultiPPoly(object):
     def __init__(self, polys):
