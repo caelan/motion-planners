@@ -55,7 +55,7 @@ def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocit
     positions = [positions_curve(t) for t in times]
     times, _ = filter_proximity(times, positions, resolution)
 
-    times.extend(np.hstack(positions_curve.derivative().roots(discontinuity=True)))
+    times.extend(np.hstack(positions_curve.derivative().roots(discontinuity=True))) # TODO: make these points special within filter proximity
     times = sorted(set(times))
     positions = [positions_curve(t) for t in times]
 

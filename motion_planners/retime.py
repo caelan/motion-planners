@@ -189,12 +189,14 @@ def trim_start(poly, start):
     return poly
 
 def trim(poly, start=None, end=None):
+    if isinstance(poly, MultiPPoly):
+        return poly.trim(start=start, end=end)
     if end is None:
         end = spline_end(poly)
-    assert start <= end
-    poly = trim_end(poly, end)
     if start is None:
         start = spline_start(poly)
+    assert start <= end
+    poly = trim_end(poly, end)
     poly = trim_start(poly, start)
     return poly
 
@@ -217,6 +219,19 @@ class MultiPPoly(object):
         return spline_end(self)
     def __call__(self, *args, **kwargs):
         return np.array([poly(*args, **kwargs) for poly in self.polys])
+    def trim(self, *args, **wkargs):
+        return MultiPPoly([trim(poly, *args, **wkargs) for poly in self.polys])
+    def append(self, new_polys):
+        assert len(self.polys) == len(new_polys)
+        return MultiPPoly([append_polys(poly, new_poly) for poly, new_poly in zip(self.polys, new_polys)])
+    @staticmethod
+    def from_poly(poly):
+        from scipy.interpolate import PPoly
+        if isinstance(poly, MultiPPoly):
+            return poly
+        assert len(poly.c.shape) == 3
+        d = poly.c.shape[2]
+        return MultiPPoly([PPoly(c=poly.c[...,k], x=poly.x) for k in range(d)])
     @staticmethod
     def concatenate(self, polys):
         raise NotImplementedError()

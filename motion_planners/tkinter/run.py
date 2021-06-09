@@ -7,7 +7,7 @@ import random
 import sys
 
 from ..parabolic import solve_multi_poly,  opt_straight_line, solve_multivariate_ramp, solve_multi_linear
-from ..retime import spline_duration, trim, trim_end, trim_start
+from ..retime import spline_duration, trim, trim_end, trim_start, MultiPPoly
 from .discretize import time_discretize_curve, V_MAX, A_MAX
 from .limits import get_max_velocity
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn
@@ -67,6 +67,7 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     #positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
 
     positions_curve = solve_multi_linear(waypoints, v_max, a_max)
+    positions_curve = MultiPPoly.from_poly(positions_curve)
     #positions_curve = solve_multi_poly(times, waypoints, velocities, v_max, a_max)
     #positions_curve = positions_curve.spline()
     #positions_curve = positions_curve.hermite_spline()
