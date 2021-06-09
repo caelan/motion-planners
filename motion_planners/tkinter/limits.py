@@ -3,47 +3,24 @@ import time
 import numpy as np
 
 from motion_planners.utils import INF, elapsed_time
+from motion_planners.retime import spline_start, spline_end
 
 EPSILON = 1e-6
 
 def get_max_velocity(velocities, norm=INF):
     return np.linalg.norm(velocities, ord=norm)
 
-def check_spline(spline, v_max=None, a_max=None, start=None, end=None):
+def old_check_spline(spline, v_max=None, a_max=None, start=None, end=None):
+    # TODO: be careful about time vs index (here is index)
     if (v_max is None) and (a_max is None):
         return True
     if start is None:
         start = 0
     if end is None:
         end = len(spline.x) - 1
-    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PPoly.html#scipy.interpolate.PPoly
-    # polys = [np.poly1d([spline.c[c, 0, k] for c in range(spline.c.shape[0])]) # Decreasing order
-    #         for k in range(spline.c.shape[-1])]
-    # from numpy.polynomial.polynomial import Polynomial
-    # polys = [Polynomial([spline.c[c, 0, k] for c in range(spline.c.shape[0])][-1])  # Increasing order
-    #          for k in range(spline.c.shape[-1])]
-
-    # TODO: take zersos of the velocity
-    # _, v = find_max_velocity(spline, ord=INF)
-    # _, a = find_max_acceleration(spline, ord=INF)
-    # print(v, v_max, a, a_max)
-    # input()
-
-    if v_max is not None:
-        t, v = find_max_velocity(spline, start=start, end=end)
-        print('Max velocity: {:.3f}/{:.3f} (at time {:.3f})'.format(v, get_max_velocity(v_max), t))
-        if abs(v) > get_max_velocity(v_max) + EPSILON:
-            return False
-    if a_max is not None:
-        t, a = find_max_acceleration(spline, start=start, end=end)
-        print('Max accel: {:.3f}/{:.3f} (at time {:.3f})'.format(a, get_max_velocity(a_max), t))
-        if abs(a) > get_max_velocity(a_max) + EPSILON:
-            return False
-    return True
-
     signs = [+1, -1]
     for i in range(start, end):
-        t0, t1 = spline.x[i], spline.x[i+1]
+        t0, t1 = spline.x[i], spline.x[i + 1]
         t0, t1 = 0, (t1 - t0)
         boundary_ts = [t0, t1]
         for k in range(spline.c.shape[-1]):
@@ -56,22 +33,57 @@ def check_spline(spline, v_max=None, a_max=None, start=None, end=None):
                 if any(abs(vel_poly(t)) > v_max[k] for t in boundary_ts):
                     return False
                 if any(not isinstance(r, complex) and (t0 <= r <= t1)
-                       for s in signs for r in (vel_poly + s*np.poly1d([v_max[k]])).roots):
+                       for s in signs for r in (vel_poly + s * np.poly1d([v_max[k]])).roots):
                     return False
-            #a_max = None
+            # a_max = None
 
             # TODO: reorder to check endpoints first
-            if a_max is not None: # INF
+            if a_max is not None:  # INF
                 accel_poly = position_poly.deriv(m=2)
-                #print([(accel_poly(t), a_max[k]) for t in boundary_ts])
+                # print([(accel_poly(t), a_max[k]) for t in boundary_ts])
                 if any(abs(accel_poly(t)) > a_max[k] for t in boundary_ts):
                     return False
                 # print([accel_poly(r) for s in signs for r in (accel_poly + s*np.poly1d([a_max[k]])).roots
                 #        if isinstance(r, complex) and (t0 <= r <= t1)])
                 if any(not isinstance(r, complex) and (t0 <= r <= t1)
-                       for s in signs for r in (accel_poly + s*np.poly1d([a_max[k]])).roots):
+                       for s in signs for r in (accel_poly + s * np.poly1d([a_max[k]])).roots):
                     return False
     return True
+
+def check_spline(spline, v_max=None, a_max=None, **kwargs):
+    if (v_max is None) and (a_max is None):
+        return True
+    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PPoly.html#scipy.interpolate.PPoly
+    # polys = [np.poly1d([spline.c[c, 0, k] for c in range(spline.c.shape[0])]) # Decreasing order
+    #         for k in range(spline.c.shape[-1])]
+    # from numpy.polynomial.polynomial import Polynomial
+    # polys = [Polynomial([spline.c[c, 0, k] for c in range(spline.c.shape[0])][-1])  # Increasing order
+    #          for k in range(spline.c.shape[-1])]
+
+    # _, v = find_max_velocity(spline, ord=INF)
+    # _, a = find_max_acceleration(spline, ord=INF)
+    # print(v, v_max, a, a_max)
+    # input()
+
+    if v_max is not None:
+        # TODO: maybe the pieces are screwing something
+        t, v = find_max_velocity(spline, **kwargs)
+        print('Max velocity: {:.3f}/{:.3f} (at time {:.3f})'.format(v, get_max_velocity(v_max), t))
+        if abs(v) > get_max_velocity(v_max) + EPSILON:
+            return False
+    return True
+    # TODO: trusting continuous pieces to respect
+    # TODO: solve for the intersection when not at a root
+    # if a_max is not None:
+    #     t, a = find_max_acceleration(spline, **kwargs)
+    #     print('Max accel: {:.3f}/{:.3f} (at time {:.3f})'.format(a, get_max_velocity(a_max), t))
+    #     if abs(a) > get_max_velocity(a_max) + EPSILON:
+    #         print(t, a)
+    #         print(spline.x)
+    #         print(t in spline.x)
+    #         input()
+    #         return False
+    # return True
 
 ##################################################
 
@@ -117,7 +129,7 @@ def find_max_curve(curve, start_t=None, end_t=None, norm=INF, **kwargs):
 
 ##################################################
 
-def maximize_curve(curve, start_t=None, end_t=None): # fn=None
+def maximize_curve(curve, start_t=None, end_t=None, discontinuity=True, ignore=set()): # fn=None
     if start_t is None:
         start_t = curve.x[0]
     if end_t is None:
@@ -125,13 +137,14 @@ def maximize_curve(curve, start_t=None, end_t=None): # fn=None
     #d = curve(start_t)
     derivative = curve.derivative(nu=1)
     times = list(curve.x)
-    roots = derivative.roots(discontinuity=True)
+    roots = derivative.roots(discontinuity=discontinuity)
     for r in roots:
         if r.shape:
             times.extend(r)
         else:
             times.append(r)
-    times = sorted(t for t in times if not np.isnan(t) and (start_t <= t <= end_t)) # TODO: filter repeated
+    times = sorted(t for t in times if not np.isnan(t)
+                   and (start_t <= t <= end_t) and (t not in ignore)) # TODO: filter repeated
     #fn = lambda t: max(np.absolute(curve(t)))
     fn = lambda t: np.linalg.norm(curve(t), ord=INF) if curve(t).shape else float(curve(t))
     #fn = max
@@ -147,6 +160,8 @@ def find_max_velocity(positions_curve, **kwargs):
 
 
 def find_max_acceleration(positions_curve, **kwargs):
+    # TODO: should only ever be quadratic
     accelerations_curve = positions_curve.derivative(nu=2)
     #return find_max_curve(accelerations_curve, max_iterations=None, **kwargs)
-    return maximize_curve(accelerations_curve)
+    return maximize_curve(accelerations_curve, discontinuity=False,)
+                          #ignore=set(positions_curve.x))

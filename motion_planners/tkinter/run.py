@@ -77,19 +77,19 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     # for d in range(positions_curve.c.shape[-1]):
     #     print(d, positions_curve.c[..., d])
 
-    t1, t2 = np.random.uniform(positions_curve.x[0], positions_curve.x[-1], 2)
-    if t1 > t2:
-        t1, t2 = t2, t1
-    print(t1, t2)
-    print([positions_curve(t) for t in [t1, t2]])
-    positions_curve = trim(positions_curve, t1, t2) # trim | trim_start | trim_end
-    print(positions_curve.x)
-    print([positions_curve(t) for t in [t1, t2]])
+    # t1, t2 = np.random.uniform(positions_curve.x[0], positions_curve.x[-1], 2)
+    # if t1 > t2:
+    #     t1, t2 = t2, t1
+    # print(t1, t2)
+    # print([positions_curve(t) for t in [t1, t2]])
+    # positions_curve = trim(positions_curve, t1, t2) # trim | trim_start | trim_end
+    # print(positions_curve.x)
+    # print([positions_curve(t) for t in [t1, t2]])
 
-    # positions_curve = smooth_curve(positions_curve,
-    #                                #v_max=None, a_max=None,
-    #                                v_max=v_max, a_max=a_max,
-    #                                **kwargs)
+    positions_curve = smooth_curve(positions_curve,
+                                   #v_max=None, a_max=None,
+                                   v_max=v_max, a_max=a_max,
+                                   **kwargs)
 
     return positions_curve
 
@@ -131,11 +131,11 @@ def main():
     #########################
 
     obstacles = [
-        # create_box(center=(.35, .75), extents=(.25, .25)),
-        # create_box(center=(.75, .35), extents=(.25, .25)),
-        # #create_box(center=(.75, .35), extents=(.225, .225)),
-        # create_box(center=(.5, .5), extents=(.25, .25)),
-        # #create_box(center=(.5, .5), extents=(.225, .225)),
+        create_box(center=(.35, .75), extents=(.25, .25)),
+        create_box(center=(.75, .35), extents=(.25, .25)),
+        #create_box(center=(.75, .35), extents=(.225, .225)),
+        create_box(center=(.5, .5), extents=(.25, .25)),
+        #create_box(center=(.5, .5), extents=(.225, .225)),
 
         create_cylinder(center=(.25, .25), radius=.1),
     ]

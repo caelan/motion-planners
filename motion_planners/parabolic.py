@@ -240,10 +240,15 @@ def min_stage(x1, x2, v1, v2, T, v_max=INF, a_max=INF):
 
 def min_spline(times, positions, velocities, **kwargs):
     assert len(times) == len(positions) == len(velocities)
-    assert strictly_increasing(times)
+    # if not strictly_increasing(times):
+    #     print(times)
+    #     print(positions)
+    #     input()
     splines = []
     for (t1, x1, v1), (t2, x2, v2) in get_pairs(list(zip(times, positions, velocities))):
         T = t2 - t1
+        if T == 0: # TODO: check x1/x2 continuity etc.
+            continue
         spline = min_stage(x1, x2, v1, v2, T, **kwargs)
         if spline is None:
             return None

@@ -184,7 +184,7 @@ def trim_start(poly, start):
 
     times = [start] + list(times[first:])
     c = poly.c[:,first-1:,...]
-    c[:,0,...] = correction.c[-poly.c.shape[0]:,0,...]
+    c[:,0,...] = correction.c[-poly.c.shape[0]:,0,...] # TODO: assert that the rest are zero
     poly = PPoly(c=c, x=times)
     return poly
 
@@ -221,9 +221,15 @@ class MultiPPoly(object):
         return np.array([poly(*args, **kwargs) for poly in self.polys])
     def trim(self, *args, **wkargs):
         return MultiPPoly([trim(poly, *args, **wkargs) for poly in self.polys])
-    def append(self, new_polys):
-        assert len(self.polys) == len(new_polys)
-        return MultiPPoly([append_polys(poly, new_poly) for poly, new_poly in zip(self.polys, new_polys)])
+    #def append(self, new_polys):
+    #    assert len(self.polys) == len(new_polys)
+    #    return MultiPPoly([append_polys(poly, new_poly) for poly, new_poly in zip(self.polys, new_polys)])
+    def append(self, *multi_polys):
+        d = len(self.polys)
+        new_polys = []
+        for k in range(d):
+            new_polys.append(append_polys(self.polys[k], *[multi_poly.polys[k] for multi_poly in multi_polys]))
+        return MultiPPoly(new_polys)
     @staticmethod
     def from_poly(poly):
         from scipy.interpolate import PPoly
@@ -244,6 +250,7 @@ class MultiPPoly(object):
     def antiderivative(self, *args, **kwargs):
         return MultiPPoly([poly.antiderivative(*args, **kwargs) for poly in self.polys])
     def roots(self, *args, **kwargs):
+        # TODO: roots per poly
         return np.array([poly.roots(*args, **kwargs) for poly in self.polys])
     def spline(self, **kwargs):
         from scipy.interpolate import CubicSpline
