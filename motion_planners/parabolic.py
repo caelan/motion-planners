@@ -76,13 +76,12 @@ def zero_three_stage(x1, x2, T, v_max=INF, a_max=INF):
     p_curve = curve_from_controls(durations, accels, x0=x1)
     return p_curve
 
-def opt_straight_line(x1, x2, T_min=0., v_max=INF, a_max=INF):
+def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0.):
     # TODO: solve for a given T which is higher than the min T
     # TODO: solve for all joints at once using a linear interpolator
     # Can always rest at the start of the trajectory if need be
     # Exploits symmetry
     assert (v_max >= 0) and (a_max >= 0)
-    sign = get_sign(x2 - x1)
     #v_max = abs(x2 - x1) / abs(v_max)
     d = abs(x2 - x1)
     # if v_max == INF:
@@ -262,6 +261,25 @@ def solve_multi_poly(times, positions, velocities, v_max, a_max, **kwargs):
     if any(position_curve is None for position_curve in positions_curves):
         return None
     return MultiPPoly(positions_curves)
+
+def solve_multi_linear(positions, v_max, a_max, **kwargs):
+    from scipy.interpolate import PPoly
+    d = len(positions[0])
+    assert len(v_max) == len(a_max)
+    splines = []
+    for x1, x2 in get_pairs(positions):
+        difference = np.subtract(x2, x1) # TODO: pass if too small
+        unit_v_max = min(np.divide(v_max, np.absolute(difference)))
+        unit_a_max = min(np.divide(a_max, np.absolute(difference)))
+        unit_x1 = 0.
+        unit_x2 = 1.
+        curve = opt_straight_line(unit_x1, unit_x2, v_max=unit_v_max, a_max=unit_a_max)
+        c = np.zeros(curve.c.shape + (d,))
+        for k in range(d):
+            c[:,:,k] = difference[k]*curve.c
+            c[-1,:,k] += x1[k]
+        splines.append(PPoly(c=c, x=curve.x))
+    return append_polys(*splines)
 
 ##################################################
 

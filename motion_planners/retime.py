@@ -96,6 +96,7 @@ def curve_from_controls(durations, accels, t0=0., x0=0., v0=0.):
     #         coeffs[max_order - k, i] = c
     from scipy.interpolate import PPoly
     # TODO: check continuity
+    #from scipy.interpolate import CubicHermiteSpline
     return PPoly(c=np.array(coeffs).T, x=times) # TODO: spline.extend
 
 ##################################################
