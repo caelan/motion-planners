@@ -9,6 +9,9 @@ EPSILON = 1e-6
 def get_max_velocity(velocities, norm=INF):
     return np.linalg.norm(velocities, ord=norm)
 
+def poly_from_spline(spline, i, d):
+    return np.poly1d([spline.c[c, i, d] for c in range(spline.c.shape[0])])
+
 def old_check_spline(spline, v_max=None, a_max=None, start_idx=None, end_idx=None):
     # TODO: be careful about time vs index (here is index)
     if (v_max is None) and (a_max is None):
@@ -23,7 +26,7 @@ def old_check_spline(spline, v_max=None, a_max=None, start_idx=None, end_idx=Non
         t0, t1 = 0, (t1 - t0)
         boundary_ts = [t0, t1]
         for k in range(spline.c.shape[-1]):
-            position_poly = np.poly1d([spline.c[c, i, k] for c in range(spline.c.shape[0])])
+            position_poly = poly_from_spline(spline, i, d=k)
             # print([position_poly(t) for t in boundary_ts])
             # print([spline(t)[k] for t in boundary_ts])
 
@@ -173,5 +176,19 @@ def find_max_acceleration(positions_curve, **kwargs):
     return maximize_curve(accelerations_curve, discontinuity=True,)
                           #ignore=set(positions_curve.x))
 
-def continuity():
-    pass
+def analyze_continuity(curve, epsilon=1e-9, **kwargs):
+    # TODO: explicitly check the adjacent curves
+    start_t, end_t = get_interval(curve, **kwargs)
+    max_t, max_error = start_t, 0.
+    for i in range(1, len(curve.x)-1):
+        t = curve.x[i]
+        if not start_t <= t <= end_t:
+            continue
+        t1 = t - epsilon # TODO: check i-1
+        t2 = t + epsilon # TODO: check i+1
+        v1 = curve(t1)
+        v2 = curve(t2)
+        error = np.linalg.norm(v2 - v1, ord=INF)
+        if error > max_error:
+            max_t, max_error = t, error
+    return max_t, max_error

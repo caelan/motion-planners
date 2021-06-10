@@ -7,7 +7,7 @@ from .limits import check_spline
 from .discretize import time_discretize_curve
 from .parabolic import solve_multi_poly, solve_multivariate_ramp, EPSILON
 from .retime import trim, spline_duration, append_polys
-from ..utils import INF, elapsed_time, get_pairs, find
+from ..utils import INF, elapsed_time, get_pairs, find, default_selector
 
 def find_lower_bound(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
     d = len(x1)
@@ -25,38 +25,6 @@ def find_lower_bound(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
         ])
     return max(lower_bounds)
 
-##################################################
-
-def test_spline(best_t, x1, x2, v1, v2):
-    observations = [
-        (0., x1[0], 0),
-        (best_t, x2[0], 0),
-        (0., v1[0], 1),
-        (best_t, v2[0], 1),
-    ]
-    degree = len(observations) - 1
-
-    from numpy import poly1d
-    terms = []
-    for k in range(degree + 1):
-        coeffs = np.zeros(degree + 1)
-        coeffs[k] = 1.
-        terms.append(poly1d(coeffs))
-    # series = poly1d(np.ones(degree+1))
-
-    A = []
-    b = []
-    for t, v, nu in observations:
-        A.append([term.deriv(m=nu)(t) for term in terms])
-        b.append(v)
-    print(A)
-    print(b)
-    print(np.linalg.solve(A, b))
-    # print(polyfit([t for t, _, nu in observations if nu == 0],
-    #              [v for _, v, nu in observations if nu == 0], deg=degree))
-    # TODO: compare with CubicHermiteSpline
-
-
 def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, max_accelerations=None): # a_max
 
     def curve_collision_fn(curve, t0=None, t1=None):
@@ -72,11 +40,12 @@ def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, ma
                                            start_t=t0, end_t=t1,
                                            #max_velocities=v_max,
                                            )
-        if any(map(collision_fn, samples)):
+        if any(map(collision_fn, default_selector(samples))):
            return True
         return False
     return curve_collision_fn
 
+##################################################
 
 def smooth_curve(start_curve, v_max, a_max, curve_collision_fn=lambda *args, **kwargs: False,
                  sample=True, intermediate=True, cubic=True, refit=True, num=1000, min_improve=0., max_time=INF):
@@ -204,3 +173,34 @@ def smooth_curve(start_curve, v_max, a_max, curve_collision_fn=lambda *args, **k
         num, spline_duration(start_curve), spline_duration(curve), elapsed_time(start_time)))
     check_spline(curve, v_max, a_max)
     return curve
+
+##################################################
+
+def test_spline(best_t, x1, x2, v1, v2):
+    observations = [
+        (0., x1[0], 0),
+        (best_t, x2[0], 0),
+        (0., v1[0], 1),
+        (best_t, v2[0], 1),
+    ]
+    degree = len(observations) - 1
+
+    from numpy import poly1d
+    terms = []
+    for k in range(degree + 1):
+        coeffs = np.zeros(degree + 1)
+        coeffs[k] = 1.
+        terms.append(poly1d(coeffs))
+    # series = poly1d(np.ones(degree+1))
+
+    A = []
+    b = []
+    for t, v, nu in observations:
+        A.append([term.deriv(m=nu)(t) for term in terms])
+        b.append(v)
+    print(A)
+    print(b)
+    print(np.linalg.solve(A, b))
+    # print(polyfit([t for t, _, nu in observations if nu == 0],
+    #              [v for _, v, nu in observations if nu == 0], deg=degree))
+    # TODO: compare with CubicHermiteSpline

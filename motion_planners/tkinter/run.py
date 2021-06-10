@@ -10,6 +10,7 @@ from ..trajectory.parabolic import solve_multi_linear
 from ..trajectory.discretize import time_discretize_curve, V_MAX, A_MAX
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn
 from ..trajectory.smooth import smooth_curve, get_curve_collision_fn
+from ..trajectory.limits import analyze_continuity
 from .viewer import create_box, draw_environment, add_points, \
     add_roadmap, get_box_center, add_path, create_cylinder, add_timed_path
 from ..utils import user_input, profiler, INF, compute_path_cost, elapsed_time, remove_redundant, waypoints_from_path
@@ -72,6 +73,9 @@ def retime_path(path, collision_fn=lambda q: False, **kwargs):
     #positions_curve = solve_multi_poly(times, waypoints, velocities, v_max, a_max)
     #positions_curve = positions_curve.spline()
     #positions_curve = positions_curve.hermite_spline()
+    print('Position: t={:.3f}, error={:.3E}'.format(*analyze_continuity(positions_curve)))
+    print('Velocity: t={:.3f}, error={:.3E}'.format(*analyze_continuity(positions_curve.derivative(nu=1))))
+    print('Acceleration: t={:.3f}, error={:.3E}'.format(*analyze_continuity(positions_curve.derivative(nu=2))))
 
     # t1, t2 = np.random.uniform(positions_curve.x[0], positions_curve.x[-1], 2)
     # if t1 > t2:
@@ -88,6 +92,9 @@ def retime_path(path, collision_fn=lambda q: False, **kwargs):
                                    v_max=v_max,
                                    a_max=a_max,
                                    curve_collision_fn=curve_collision_fn, **kwargs)
+    print('Position: t={:.3f}, error={:.3E}'.format(*analyze_continuity(positions_curve)))
+    print('Velocity: t={:.3f}, error={:.3E}'.format(*analyze_continuity(positions_curve.derivative(nu=1))))
+    print('Acceleration: t={:.3f}, error={:.3E}'.format(*analyze_continuity(positions_curve.derivative(nu=2))))
 
     return positions_curve
 

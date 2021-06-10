@@ -63,17 +63,32 @@ def append_polys(poly1, *polys):
         #total_poly.extend()
     return total_poly
 
+##################################################
+
+def get_times(curve):
+    return curve.x
+
 
 def spline_start(spline):
-    return spline.x[0]
+    return get_times(spline)[0]
 
 
 def spline_end(spline):
-    return spline.x[-1]
+    return get_times(spline)[-1]
 
 
 def spline_duration(spline):
     return spline_end(spline) - spline_start(spline)
+
+def get_interval(curve, start_t=None, end_t=None):
+    if start_t is None:
+        start_t = spline_start(curve)
+    if end_t is None:
+        end_t = spline_end(curve)
+    start_t = max(start_t, spline_start(curve))
+    end_t = min(end_t, spline_end(curve))
+    assert start_t < end_t
+    return start_t, end_t
 
 ##################################################
 
@@ -276,14 +291,3 @@ class MultiPPoly(object):
         return CubicHermiteSpline(times, positions, dydx=velocities, **kwargs)
     def __str__(self):
         return '{}({})'.format(self.__class__.__name__, self.polys)
-
-
-def get_interval(curve, start_t=None, end_t=None):
-    if start_t is None:
-        start_t = spline_start(curve)
-    if end_t is None:
-        end_t = spline_end(curve)
-    start_t = max(start_t, spline_start(curve))
-    end_t = min(end_t, spline_end(curve))
-    assert start_t < end_t
-    return start_t, end_t

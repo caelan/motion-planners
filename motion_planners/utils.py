@@ -258,4 +258,4 @@ def bisect_selector(path):
     return bisect(path)
 
 
-default_selector = bisect_selector
+default_selector = bisect_selector # random_selector
