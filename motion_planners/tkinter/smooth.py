@@ -76,7 +76,7 @@ def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, ma
 
 
 def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: False,
-                 intermediate=True, cubic=True, refit=True, num=1000, min_improve=0., max_time=INF):
+                 intermediate=False, cubic=True, refit=True, num=1000, min_improve=0., max_time=INF):
     # TODO: rename smoothing.py to shortcutting.py
     from scipy.interpolate import CubicHermiteSpline, CubicSpline
     start_time = time.time()
@@ -137,31 +137,30 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
         # if not check_spline(new_positions_curve, v_max, a_max):
         #     continue
 
-        new_positions_curve = solve_multi_poly(times=spliced_times, positions=spliced_positions, velocities=spliced_velocities,
-                                               v_max=v_max, a_max=a_max)
-        if (new_positions_curve is None) or (spline_duration(new_positions_curve) > max_t):
-            continue
-        if curve_collision_fn(new_positions_curve, t0=None, t1=None):
-            continue
-        #print(new_positions_curve.hermite_spline().c[0,...])
-
         if intermediate:
+            new_positions_curve = solve_multi_poly(times=spliced_times, positions=spliced_positions,
+                                                   velocities=spliced_velocities,
+                                                   v_max=v_max, a_max=a_max)
+            if (new_positions_curve is None) or (spline_duration(new_positions_curve) > max_t):
+                continue
+            if curve_collision_fn(new_positions_curve, t0=None, t1=None):
+                continue
+            # print(new_positions_curve.hermite_spline().c[0,...])
             spliced_positions = [new_positions_curve(x) for x in new_positions_curve.x]
             spliced_velocities = [new_positions_curve(x, nu=1) for x in new_positions_curve.x]
             spliced_durations = [t1 - times[i1]] + [x - new_positions_curve.x[0]
                                                     for x in new_positions_curve.x[1:]] + [times[i2] - t2]
 
-        new_durations = np.concatenate([
-            durations[:i1+1], spliced_durations, durations[i2+1:]])
-        #assert len(new_durations) == (i1 + 1) + (len(durations) - i2) + 2
-        new_times = np.cumsum(new_durations)
-        #new_times = [new_times[0]] + [t2 for t1, t2 in get_pairs(new_times) if t2 > t1]
-        new_positions = positions[:i1+1] + spliced_positions + positions[i2:]
-        new_velocities = velocities[:i1+1] + spliced_velocities + velocities[i2:]
-        #if not all(np.less_equal(np.absolute(v), v_max).all() for v in new_velocities):
-        #    continue
-
         if refit:
+            new_durations = np.concatenate([
+                durations[:i1 + 1], spliced_durations, durations[i2 + 1:]])
+            # assert len(new_durations) == (i1 + 1) + (len(durations) - i2) + 2
+            new_times = np.cumsum(new_durations)
+            # new_times = [new_times[0]] + [t2 for t1, t2 in get_pairs(new_times) if t2 > t1]
+            new_positions = positions[:i1 + 1] + spliced_positions + positions[i2:]
+            new_velocities = velocities[:i1 + 1] + spliced_velocities + velocities[i2:]
+            # if not all(np.less_equal(np.absolute(v), v_max).all() for v in new_velocities):
+            #    continue
             if cubic:
                 # new_positions_curve = CubicSpline(new_times, new_positions)
                 new_positions_curve = CubicHermiteSpline(new_times, new_positions, dydx=new_velocities)

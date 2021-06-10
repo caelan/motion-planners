@@ -27,7 +27,8 @@ def filter_proximity(times, positions, resolution=0.):
 
 ##################################################
 
-def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocities=None, verbose=True, time_step=1e-2):
+def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocities=None, verbose=True,
+                          resolution=1e-2, time_step=1e-2):
     if start_t is None:
         start_t = spline_start(positions_curve)
     if end_t is None:
@@ -38,7 +39,6 @@ def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocit
 
     norm = INF
     d = len(positions_curve(start_t))
-    resolution = 2e-2
     resolutions = resolution*np.ones(d)
     if max_velocities is None:
         # TODO: adjust per trajectory segment
