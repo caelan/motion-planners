@@ -1,5 +1,13 @@
 import time
 
+from .lattice import lattice
+from .lazy_prm import lazy_prm
+from .prm import prm
+from .rrt import rrt
+from .rrt_connect import rrt_connect, birrt
+from .rrt_star import rrt_star
+from .utils import INF
+
 from .smoothing import smooth_path
 from .utils import RRT_RESTARTS, RRT_SMOOTHING, INF, irange, elapsed_time, compute_path_cost, default_selector
 
@@ -27,6 +35,7 @@ def direct_path(start, goal, extend_fn, collision_fn):
     #     path.append(q)
     # return path
 
+#################################################################
 
 def random_restarts(solve_fn, start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                     restarts=RRT_RESTARTS, smooth=RRT_SMOOTHING,
@@ -59,7 +68,7 @@ def random_restarts(solve_fn, start, goal, distance_fn, sample_fn, extend_fn, co
         if path is None:
             continue
         if smooth is not None:
-            path = smooth_path(path, extend_fn, collision_fn, iterations=smooth)
+            path = smooth_path(path, extend_fn, collision_fn, max_iterations=smooth)
         solutions.append(path)
         if compute_path_cost(path, distance_fn) < success_cost:
             break
@@ -70,3 +79,36 @@ def random_restarts(solve_fn, start, goal, distance_fn, sample_fn, extend_fn, co
 
 def solve_and_smooth(solve_fn, q1, q2, distance_fn, sample_fn, extend_fn, collision_fn, **kwargs):
     return random_restarts(solve_fn, q1, q2, distance_fn, sample_fn, extend_fn, collision_fn, restarts=0, **kwargs)
+
+#################################################################
+
+def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorithm='birrt',
+          max_time=INF, max_iterations=INF, num_samples=100, **kwargs):
+    # TODO: allow distance_fn to be skipped
+    # TODO: check the start and goal
+    # TODO: test the straight line
+    # TODO: return lambda function
+    if algorithm == 'prm':
+        path = prm(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
+                   num_samples=num_samples)
+    elif algorithm == 'lazy_prm':
+        path = lazy_prm(start, goal, sample_fn, extend_fn, collision_fn,
+                        num_samples=num_samples, max_time=max_time)[0]
+    elif algorithm == 'rrt':
+        path = rrt(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
+                   max_iterations=max_iterations, max_time=max_time)
+    elif algorithm == 'rrt_connect':
+        path = rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
+                           max_iterations=INF, max_time=max_time)
+    elif algorithm == 'birrt':
+        path = birrt(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
+                     max_iterations=INF, max_time=max_time, **kwargs) # restarts=2, smooth=100
+    elif algorithm == 'rrt_star':
+        path = rrt_star(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, radius=1,
+                        max_iterations=INF, max_time=max_time)
+    elif algorithm == 'lattice':
+        path = lattice(start, goal, extend_fn, collision_fn, distance_fn=distance_fn, max_time=INF)
+    else:
+        raise NotImplementedError(algorithm)
+    # TODO: postprocessing
+    return path

@@ -63,25 +63,29 @@ class PRMViewer(object):
 
 #################################################################
 
-def contains_box(point, box):
+MIN_PROXIMITY = 1e-2
+
+def contains_box(point, box, buffer=0.):
     (lower, upper) = box
-    return np.greater_equal(point, lower).all() and \
-           np.greater_equal(upper, point).all()
+    lower = lower - buffer*np.ones(len(lower))
+    upper = upper + buffer*np.ones(len(upper))
+    return np.less_equal(lower, point).all() and \
+           np.less_equal(point, upper).all()
     #return np.all(point >= lower) and np.all(upper >= point)
 
-def contains_circle(point, circle):
+def contains_circle(point, circle, buffer=0.):
     center, radius = circle
-    return np.linalg.norm(np.array(point) - np.array(center)) <= radius
+    return np.linalg.norm(np.array(point) - np.array(center)) <= (radius + buffer)
 
-def contains(point, shape):
+def contains(point, shape, **kwargs):
     if isinstance(shape, Box):
-        return contains_box(point, shape)
+        return contains_box(point, shape, **kwargs)
     if isinstance(shape, Circle):
-        return contains_circle(point, shape)
+        return contains_circle(point, shape, **kwargs)
     raise NotImplementedError(shape)
 
-def point_collides(point, boxes):
-    return any(contains(point, box) for box in boxes)
+def point_collides(point, obstacles, buffer=MIN_PROXIMITY, **kwargs):
+    return any(contains(point, obst, buffer=buffer, **kwargs) for obst in obstacles)
 
 def sample_line(segment, step_size=2e-2):
     (q1, q2) = segment
@@ -91,11 +95,11 @@ def sample_line(segment, step_size=2e-2):
         yield tuple(np.array(q1) + l * diff / dist)
     yield q2
 
-def line_collides(line, box):  # TODO - could also compute this exactly
-    return any(point_collides(point, boxes=[box]) for point in sample_line(line))
+def line_collides(line, obst, **kwargs):  # TODO - could also compute this exactly
+    return any(point_collides(point, obstacles=[obst], **kwargs) for point in sample_line(line))
 
-def is_collision_free(line, boxes):
-    return not any(line_collides(line, box) for box in boxes)
+def is_collision_free(line, obstacles, **kwargs):
+    return not any(line_collides(line, obst, **kwargs) for obst in obstacles)
 
 def create_box(center, extents):
     (x, y) = center

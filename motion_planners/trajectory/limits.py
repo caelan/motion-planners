@@ -1,5 +1,4 @@
 import time
-
 import numpy as np
 
 from motion_planners.utils import INF, elapsed_time
@@ -95,6 +94,7 @@ def minimize_objective(objective, lower, upper, num=100, max_time=INF, max_itera
     start_time = time.time()
     best_t, best_f = None, INF
     bounds = list(zip(lower, upper))
+    assert num >= 1
     for iteration in range(num):
         if elapsed_time(start_time) >= max_time:
             break
@@ -153,6 +153,14 @@ def maximize_curve(curve, start_t=None, end_t=None, discontinuity=True, ignore=s
     max_t = max(times, key=fn)
     return max_t, fn(max_t)
 
+def exceeds_curve(curve, threshold, start_t=None, end_t=None, **kwargs):
+    # TODO: joint limits
+    # TODO: solve for the intersection with threshold
+    max_t, max_v = maximize_curve(curve, start_t=start_t, end_t=end_t, **kwargs)
+    if np.greater(max_v, threshold):
+        return max_t
+    return True
+
 ##################################################
 
 def find_max_velocity(positions_curve, analytical=True, **kwargs):
@@ -169,3 +177,6 @@ def find_max_acceleration(positions_curve, **kwargs):
     #return find_max_curve(accelerations_curve, max_iterations=None, **kwargs)
     return maximize_curve(accelerations_curve, discontinuity=True,)
                           #ignore=set(positions_curve.x))
+
+def continuity():
+    pass

@@ -2,9 +2,7 @@ from scipy.spatial.kdtree import KDTree
 from heapq import heappush, heappop
 from collections import namedtuple
 
-from motion_planners.utils import random_selector, default_selector
-from .utils import INF, elapsed_time, get_pairs
-from .rrt_connect import direct_path
+from .utils import INF, elapsed_time, get_pairs, random_selector, default_selector
 from .smoothing import smooth_path
 
 import time
@@ -196,6 +194,7 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, num_samples=100,
 def replan_loop(start_conf, end_conf, sample_fn, extend_fn, collision_fn, params_list, smooth=0, **kwargs):
     if collision_fn(start_conf) or collision_fn(end_conf):
         return None
+    from .meta import direct_path
     path = direct_path(start_conf, end_conf, extend_fn, collision_fn)
     if path is not None:
         return path
@@ -203,5 +202,5 @@ def replan_loop(start_conf, end_conf, sample_fn, extend_fn, collision_fn, params
         path = lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn,
                         num_samples=num_samples, **kwargs)
         if path is not None:
-            return smooth_path(path, extend_fn, collision_fn, iterations=smooth)
+            return smooth_path(path, extend_fn, collision_fn, max_iterations=smooth)
     return None

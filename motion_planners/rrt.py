@@ -47,14 +47,14 @@ def configs(nodes):
 
 
 def rrt(start, goal_sample, distance_fn, sample_fn, extend_fn, collision_fn, goal_test=lambda q: False,
-        iterations=RRT_ITERATIONS, goal_probability=.2, max_time=INF):
+        goal_probability=.2, max_iterations=RRT_ITERATIONS, max_time=INF):
     """
     :param start: Start configuration - conf
     :param distance_fn: Distance function - distance_fn(q1, q2)->float
     :param sample_fn: Sample function - sample_fn()->conf
     :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
     :param collision_fn: Collision function - collision_fn(q)->bool
-    :param iterations: Maximum number of iterations - int
+    :param max_iterations: Maximum number of iterations - int
     :param max_time: Maximum runtime - float
     :return: Path [q', ..., q"] or None if unable to find a solution
     """
@@ -65,7 +65,7 @@ def rrt(start, goal_sample, distance_fn, sample_fn, extend_fn, collision_fn, goa
         g = goal_sample
         goal_sample = lambda: g
     nodes = [TreeNode(start)]
-    for i in irange(iterations):
+    for i in irange(max_iterations):
         if elapsed_time(start_time) >= max_time:
             break
         goal = random() < goal_probability or i == 0

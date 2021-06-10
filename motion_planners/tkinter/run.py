@@ -5,16 +5,14 @@ import argparse
 import time
 import random
 
-from ..trajectory.parabolic import opt_straight_line, solve_multivariate_ramp, solve_multi_linear
-from ..trajectory.retime import spline_duration
+from ..meta import solve
+from ..trajectory.parabolic import solve_multi_linear
 from ..trajectory.discretize import time_discretize_curve, V_MAX, A_MAX
-from ..trajectory.limits import get_max_velocity
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn
 from ..trajectory.smooth import smooth_curve, get_curve_collision_fn
 from .viewer import create_box, draw_environment, add_points, \
     add_roadmap, get_box_center, add_path, create_cylinder, add_timed_path
-from ..utils import user_input, profiler, INF, compute_path_cost, elapsed_time, get_pairs, \
-    remove_redundant, waypoints_from_path
+from ..utils import user_input, profiler, INF, compute_path_cost, elapsed_time, remove_redundant, waypoints_from_path
 from ..prm import prm
 from ..lazy_prm import lazy_prm
 from ..rrt_connect import rrt_connect, birrt
@@ -36,7 +34,18 @@ ALGORITHMS = [
 
 ##################################################
 
-def retime_path(path, velocity=get_max_velocity(V_MAX), collision_fn=lambda q: False, **kwargs):
+def buffer_durations(durations, switch_t=0., min_t=0.):
+    durations = durations + switch_t*np.ones(len(durations))
+    durations = np.maximum(min_t * np.ones(len(durations)), durations)
+    return durations
+
+def dump_spline(positions_curve):
+    print(positions_curve.c[0, ...]) # Cubic parameters
+    print(positions_curve.c.shape)
+    for d in range(positions_curve.c.shape[-1]):
+        print(d, positions_curve.c[..., d])
+
+def retime_path(path, collision_fn=lambda q: False, **kwargs):
     d = len(path[0])
     # v_max = 5.*np.ones(d)
     # a_max = v_max / 1.
@@ -45,18 +54,12 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), collision_fn=lambda q: F
 
     waypoints = remove_redundant(path)
     waypoints = waypoints_from_path(waypoints)
-    #durations = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
 
-    durations = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
-                        for x1, x2 in get_pairs(waypoints)]
-    print(sum(durations))
-    durations = [0.] + [max(spline_duration(opt_straight_line(x1[k], x2[k], v_max=v_max[k], a_max=a_max[k])) for k in range(d))
-                       for x1, x2 in get_pairs(waypoints)] # min_linear_spline | opt_straight_line
-    print(sum(durations))
-
-    durations += 1e-3*np.ones(len(durations))
-    # min_t = 1e-2
-    # durations = np.maximum(min_t*np.ones(len(durations)), durations)
+    # durations = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
+    # durations = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
+    #                     for x1, x2 in get_pairs(waypoints)]
+    # durations = [0.] + [max(spline_duration(opt_straight_line(x1[k], x2[k], v_max=v_max[k], a_max=a_max[k])) for k in range(d))
+    #                    for x1, x2 in get_pairs(waypoints)] # min_linear_spline | opt_straight_line
 
     #times = np.cumsum(durations)
     #positions_curve = interp1d(times, waypoints, kind='quadratic', axis=0) # linear | slinear | quadratic | cubic
@@ -69,11 +72,6 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), collision_fn=lambda q: F
     #positions_curve = solve_multi_poly(times, waypoints, velocities, v_max, a_max)
     #positions_curve = positions_curve.spline()
     #positions_curve = positions_curve.hermite_spline()
-
-    #print(positions_curve.c[0, ...]) # Cubic parameters
-    # print(positions_curve.c.shape)
-    # for d in range(positions_curve.c.shape[-1]):
-    #     print(d, positions_curve.c[..., d])
 
     # t1, t2 = np.random.uniform(positions_curve.x[0], positions_curve.x[-1], 2)
     # if t1 > t2:
@@ -92,6 +90,29 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), collision_fn=lambda q: F
                                    curve_collision_fn=curve_collision_fn, **kwargs)
 
     return positions_curve
+
+##################################################
+
+def problem1():
+    obstacles = [
+        create_box(center=(.35, .75), extents=(.25, .25)),
+        create_box(center=(.75, .35), extents=(.25, .25)),
+        #create_box(center=(.75, .35), extents=(.225, .225)),
+        create_box(center=(.5, .5), extents=(.25, .25)),
+        #create_box(center=(.5, .5), extents=(.225, .225)),
+
+        create_cylinder(center=(.25, .25), radius=.1),
+    ]
+
+    # TODO: alternate sampling from a mix of regions
+    regions = {
+        'env': create_box(center=(.5, .5), extents=(1., 1.)),
+        'green': create_box(center=(.8, .8), extents=(.1, .1)),
+    }
+    start = np.array([0., 0.])
+    goal = 'green'
+
+    return start, goal, regions, obstacles
 
 ##################################################
 
@@ -130,25 +151,8 @@ def main():
 
     #########################
 
-    obstacles = [
-        create_box(center=(.35, .75), extents=(.25, .25)),
-        create_box(center=(.75, .35), extents=(.25, .25)),
-        #create_box(center=(.75, .35), extents=(.225, .225)),
-        create_box(center=(.5, .5), extents=(.25, .25)),
-        #create_box(center=(.5, .5), extents=(.225, .225)),
-
-        create_cylinder(center=(.25, .25), radius=.1),
-    ]
-
-    # TODO: alternate sampling from a mix of regions
-    regions = {
-        'env': create_box(center=(.5, .5), extents=(1., 1.)),
-        'green': create_box(center=(.8, .8), extents=(.1, .1)),
-    }
+    start, goal, regions, obstacles = problem1()
     environment = regions['env']
-
-    start = np.array([0., 0.])
-    goal = 'green'
     if isinstance(goal, str) and (goal in regions):
         goal = get_box_center(regions[goal])
     else:
@@ -173,29 +177,9 @@ def main():
             sample_fn, samples = get_sample_fn(environment, obstacles=[], use_halton=False) # obstacles
             extend_fn, roadmap = get_extend_fn(environment, obstacles=obstacles)  # obstacles | []
 
-            if args.algorithm == 'prm':
-                path = prm(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
-                           num_samples=200)
-            elif args.algorithm == 'lazy_prm':
-                path = lazy_prm(start, goal, sample_fn, extend_fn, collision_fn,
-                                num_samples=200, max_time=args.time)[0]
-            elif args.algorithm == 'rrt':
-                path = rrt(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
-                           iterations=INF, max_time=args.time)
-            elif args.algorithm == 'rrt_connect':
-                path = rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
-                                   iterations=INF, max_time=args.time)
-            elif args.algorithm == 'birrt':
-                path = birrt(start, goal, distance_fn=distance_fn, sample_fn=sample_fn,
-                             extend_fn=extend_fn, collision_fn=collision_fn,
-                             restarts=2, iterations=INF, max_time=args.time, smooth=100)
-            elif args.algorithm == 'rrt_star':
-                path = rrt_star(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
-                                radius=1, max_iterations=INF, max_time=args.time)
-            elif args.algorithm == 'lattice':
-                path = lattice(start, goal, extend_fn, collision_fn, distance_fn=distance_fn)
-            else:
-                raise NotImplementedError(args.algorithm)
+            path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
+                         max_time=args.time, max_iterations=INF, num_samples=200,
+                         restarts=2, smooth=100)
             paths = [] if path is None else [path]
 
             #paths = random_restarts(rrt_connect, start, goal, distance_fn=distance_fn, sample_fn=sample_fn,
@@ -230,7 +214,7 @@ def main():
             if args.smooth:
                 for path in paths:
                     extend_fn, roadmap = get_extend_fn(obstacles=obstacles)  # obstacles | []
-                    smoothed = smooth_path(path, extend_fn, collision_fn, iterations=INF, max_time=args.time)
+                    smoothed = smooth_path(path, extend_fn, collision_fn, max_iterations=INF, max_time=args.time)
                     print('Smoothed distance_fn: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
                     add_path(viewer, smoothed, color='red')
             user_input('Finish?')
