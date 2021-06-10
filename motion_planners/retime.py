@@ -45,10 +45,20 @@ def separate_poly(poly):
 
 def append_polys(poly1, *polys):
     from scipy.interpolate import PPoly
+    if isinstance(poly1, MultiPPoly):
+        return poly1.append(*polys)
     total_poly = poly1
     for poly in polys:
+        k1, m1, d1 = total_poly.c.shape
+        k2, m2, d2 = poly.c.shape
+        assert d1 == d2
+        k = max(k1, k2)
+        c1 = np.zeros((k, m1, d1))
+        c1[-k1:, ...] = total_poly.c
+        c2 = np.zeros((k, m2, d2))
+        c2[-k2:, ...] = poly.c
         new_xs = [total_poly.x[-1] + (x - poly.x[0]) for x in poly.x[1:]]
-        total_poly = PPoly(c=np.append(total_poly.c, poly.c, axis=1),
+        total_poly = PPoly(c=np.append(c1, c2, axis=1),
                            x=np.append(total_poly.x, new_xs))
         #total_poly.extend()
     return total_poly

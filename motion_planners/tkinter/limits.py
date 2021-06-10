@@ -156,10 +156,12 @@ def maximize_curve(curve, start_t=None, end_t=None, discontinuity=True, ignore=s
 
 ##################################################
 
-def find_max_velocity(positions_curve, **kwargs):
+def find_max_velocity(positions_curve, analytical=True, **kwargs):
     velocities_curve = positions_curve.derivative(nu=1)
-    #return find_max_curve(velocities_curve, **kwargs)
-    return maximize_curve(velocities_curve)
+    if analytical:
+        return maximize_curve(velocities_curve)
+    else:
+        return find_max_curve(velocities_curve, **kwargs)
 
 
 def find_max_acceleration(positions_curve, **kwargs):

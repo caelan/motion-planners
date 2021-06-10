@@ -5,8 +5,8 @@ import numpy as np
 
 from motion_planners.tkinter.limits import check_spline
 from motion_planners.tkinter.discretize import time_discretize_curve
-from motion_planners.parabolic import solve_multi_poly, MultiPPoly, solve_multivariate_ramp
-from motion_planners.retime import trim, spline_duration
+from motion_planners.parabolic import solve_multi_poly, MultiPPoly, solve_multivariate_ramp, EPSILON
+from motion_planners.retime import trim, spline_duration, append_polys
 from motion_planners.utils import INF, elapsed_time, get_pairs, find
 
 def find_lower_bound(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
@@ -72,12 +72,14 @@ def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, ma
                                            )
         if any(map(collision_fn, samples)):
            return True
+        return False
     return curve_collision_fn
 
 
 def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: False,
-                 intermediate=False, cubic=True, refit=True, num=1000, min_improve=0., max_time=INF):
+                 intermediate=True, cubic=True, refit=False, num=1000, min_improve=1e-3, max_time=INF):
     # TODO: rename smoothing.py to shortcutting.py
+    assert refit or intermediate
     from scipy.interpolate import CubicHermiteSpline, CubicSpline
     start_time = time.time()
     curve_collision_fn = get_curve_collision_fn(collision_fn, max_velocities=v_max, max_accelerations=a_max)
@@ -108,7 +110,8 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
 
         spliced_positions = [positions_curve(t) for t in ts]
         spliced_velocities = [velocities_curve(t) for t in ts]
-        #assert all(abs(v) <= v_max for v in spliced_velocities)
+        #print(spliced_velocities)
+        assert all(np.less_equal(np.absolute(v), v_max + EPSILON).all() for v in spliced_velocities)
         #if any(np.greater(np.absolute(v), v_max).any() for v in spliced_velocities):
         #    continue # TODO: do the same with collisions
         x1, x2 = spliced_positions
@@ -132,24 +135,21 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
         spliced_times = [0, best_t]
         #spliced_times = [t1, (t1 + best_t)]
 
-        # new_positions_curve = CubicHermiteSpline(spliced_times, spliced_positions, dydx=spliced_velocities)
-        # # print(new_positions_curve.x, new_positions_curve.c)
-        # if not check_spline(new_positions_curve, v_max, a_max):
-        #     continue
-
         if intermediate:
-            new_positions_curve = solve_multi_poly(times=spliced_times, positions=spliced_positions,
-                                                   velocities=spliced_velocities,
-                                                   v_max=v_max, a_max=a_max)
-            if (new_positions_curve is None) or (spline_duration(new_positions_curve) > max_t):
-                continue
-            if curve_collision_fn(new_positions_curve, t0=None, t1=None):
+            if cubic:
+                local_positions_curve = CubicHermiteSpline(spliced_times, spliced_positions, dydx=spliced_velocities)
+            else:
+                local_positions_curve = solve_multi_poly(times=spliced_times, positions=spliced_positions,
+                                                       velocities=spliced_velocities,
+                                                       v_max=v_max, a_max=a_max)
+            if (local_positions_curve is None) or (spline_duration(local_positions_curve) >= max_t) \
+                    or curve_collision_fn(local_positions_curve, t0=None, t1=None):
                 continue
             # print(new_positions_curve.hermite_spline().c[0,...])
-            spliced_positions = [new_positions_curve(x) for x in new_positions_curve.x]
-            spliced_velocities = [new_positions_curve(x, nu=1) for x in new_positions_curve.x]
-            spliced_durations = [t1 - times[i1]] + [x - new_positions_curve.x[0]
-                                                    for x in new_positions_curve.x[1:]] + [times[i2] - t2]
+            spliced_positions = [local_positions_curve(x) for x in local_positions_curve.x]
+            spliced_velocities = [local_positions_curve(x, nu=1) for x in local_positions_curve.x]
+            spliced_durations = [t1 - times[i1]] + [x - local_positions_curve.x[0]
+                                                    for x in local_positions_curve.x[1:]] + [times[i2] - t2]
 
         if refit:
             new_durations = np.concatenate([
@@ -166,29 +166,32 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
                 new_positions_curve = CubicHermiteSpline(new_times, new_positions, dydx=new_velocities)
             else:
                 new_positions_curve = solve_multi_poly(new_times, new_positions, new_velocities, v_max, a_max)
-            # new_t1 = new_times[i1+1]
-            # new_t2 = new_times[i1+2]
-            # new_t2 = new_times[-(len(times) - i2 + 1)]
-            # new_velocities_curve = new_positions_curve.derivative()
-            # print(v2, new_velocities_curve(new_t2))
+            if (new_positions_curve is None) or (spline_duration(new_positions_curve) >= spline_duration(positions_curve)) \
+                    or curve_collision_fn(new_positions_curve, t0=None, t1=None):
+                continue
         else:
+            assert intermediate
+            # print(positions_curve.x)
+            # print(positions_curve.c[...,0])
+            # pre_curve = trim(positions_curve, end=t1)
+            # post_curve = trim(positions_curve, start=t1)
+            # curve = append_polys(pre_curve, post_curve)
+            # print(curve.x)
+            # print(curve.c[...,0])
+
+            # print(new_positions_curve.x)
+            # print(new_positions_curve.c[...,0])
             pre_curve = trim(positions_curve, end=t1)
             post_curve = trim(positions_curve, start=t2)
-            new_positions_curve = pre_curve.append(new_positions_curve, post_curve)
-            print(spliced_positions)
-            print(spliced_velocities)
-            print(new_positions_curve.x[0], new_positions_curve.x[-1])
-            print(new_positions_curve(t1), new_positions_curve(t1 + best_t))
-            print(new_positions_curve(t1, 1), new_positions_curve(t1 + best_t, 1)) # TODO: test all knots
-            #input()
-        if (new_positions_curve is None) or (spline_duration(new_positions_curve) >= spline_duration(positions_curve)):
-            continue
-        #print(new_positions_curve.c[0,...])
+            new_positions_curve = append_polys(pre_curve, local_positions_curve, post_curve) # TODO: the numerics of
+            # print(new_positions_curve.x)
+            # print(new_positions_curve.c[...,0])
+            #assert(not curve_collision_fn(new_positions_curve, t0=None, t1=None))
+            if (spline_duration(new_positions_curve) >= spline_duration(positions_curve)) or \
+                    not check_spline(new_positions_curve, v_max, a_max):
+                continue
         print('Iterations: {} | Current time: {:.3f} | New time: {:.3f} | Elapsed time: {:.3f}'.format(
             iteration, spline_duration(positions_curve), spline_duration(new_positions_curve), elapsed_time(start_time)))
-
-        if curve_collision_fn(new_positions_curve, t0=None, t1=None):
-            continue
         positions_curve = new_positions_curve
     print('Iterations: {} | Start time: {:.3f} | End time: {:.3f} | Elapsed time: {:.3f}'.format(
         num, start_positions_curve.x[-1], positions_curve.x[-1], elapsed_time(start_time)))
