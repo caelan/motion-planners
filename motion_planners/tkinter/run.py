@@ -67,7 +67,7 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     #positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
 
     positions_curve = solve_multi_linear(waypoints, v_max, a_max)
-    positions_curve = MultiPPoly.from_poly(positions_curve)
+    #positions_curve = MultiPPoly.from_poly(positions_curve)
     #positions_curve = solve_multi_poly(times, waypoints, velocities, v_max, a_max)
     #positions_curve = positions_curve.spline()
     #positions_curve = positions_curve.hermite_spline()
@@ -222,9 +222,10 @@ def main():
                 #curve = interpolate_path(path) # , collision_fn=collision_fn)
                 curve = retime_path(path, collision_fn=collision_fn)
                 times, path = time_discretize_curve(curve)
+                times = [np.linalg.norm(curve(t, nu=1), ord=INF) for t in times]
                 #add_points(viewer, [curve(t) for t in curve.x])
-                add_path(viewer, path, color='red')
-                #add_timed_path(viewer, times, path) # TODO: add curve
+                #add_path(viewer, path, color='red')
+                add_timed_path(viewer, times, path) # TODO: add curve
 
             if args.smooth:
                 for path in paths:

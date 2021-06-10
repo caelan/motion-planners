@@ -163,5 +163,5 @@ def find_max_acceleration(positions_curve, **kwargs):
     # TODO: should only ever be quadratic
     accelerations_curve = positions_curve.derivative(nu=2)
     #return find_max_curve(accelerations_curve, max_iterations=None, **kwargs)
-    return maximize_curve(accelerations_curve, discontinuity=False,)
+    return maximize_curve(accelerations_curve, discontinuity=True,)
                           #ignore=set(positions_curve.x))

@@ -173,12 +173,21 @@ def spaced_colors(n, s=1, v=1):
 def add_timed_path(viewer, times, path, **kwargs):
     # TODO: color based on velocity
     import colorsys
+
+    min_value = min(times)
+    max_value = max(times)
+
+    def get_color(t):
+        fraction = (t - min_value) / (max_value - min_value)
+        rgb = colorsys.hsv_to_rgb(h=(1-fraction)*(2./3), s=1., v=1.)
+        return hex_from_rgb(rgb)
+
+    for t, p in zip(times, path):
+        viewer.draw_point(p, radius=2, color=get_color(t), **kwargs)
     for (t1, p1), (t2, p2) in get_pairs(list(zip(times, path))):
         t = (t1 + t2) / 2
-        fraction = (t - times[0]) / (times[-1] - times[0])
-        rgb = colorsys.hsv_to_rgb(h=fraction, s=1., v=1.)
         line = (p1, p2)
-        viewer.draw_line(line, color=hex_from_rgb(rgb), **kwargs)
+        viewer.draw_line(line, color=get_color(t), **kwargs)
 
 def draw_solution(segments, obstacles, regions):
     viewer = draw_environment(obstacles, regions)

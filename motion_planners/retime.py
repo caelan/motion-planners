@@ -206,7 +206,7 @@ class MultiPPoly(object):
     def __init__(self, polys):
         self.polys = list(polys)
         self.x = sorted(np.concatenate([poly.x for poly in self.polys]))
-        self.x = [self.x[0]] + [x2 for x1, x2 in get_pairs(self.x) if x2 > x1]
+        self.x = [self.x[0]] + [x2 for x1, x2 in get_pairs(self.x) if x2 > x1 + 1e-9]
         # TODO: cache derivatives
     @property
     def d(self):
