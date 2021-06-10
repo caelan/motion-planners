@@ -4,14 +4,13 @@ import numpy as np
 import argparse
 import time
 import random
-import sys
 
-from ..parabolic import solve_multi_poly,  opt_straight_line, solve_multivariate_ramp, solve_multi_linear
-from ..retime import spline_duration, trim, trim_end, trim_start, MultiPPoly
-from .discretize import time_discretize_curve, V_MAX, A_MAX
-from .limits import get_max_velocity
+from motion_planners.trajectory.parabolic import opt_straight_line, solve_multivariate_ramp, solve_multi_linear
+from motion_planners.trajectory.retime import spline_duration
+from motion_planners.trajectory.discretize import time_discretize_curve, V_MAX, A_MAX
+from motion_planners.trajectory.limits import get_max_velocity
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn
-from .smooth import smooth_curve
+from motion_planners.trajectory.smooth import smooth_curve
 from .viewer import create_box, draw_environment, add_points, \
     add_roadmap, get_box_center, add_path, create_cylinder, add_timed_path
 from ..utils import user_input, profiler, INF, compute_path_cost, elapsed_time, get_pairs, \
@@ -38,7 +37,6 @@ ALGORITHMS = [
 ##################################################
 
 def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
-    from scipy.interpolate import CubicSpline, CubicHermiteSpline
     d = len(path[0])
     # v_max = 5.*np.ones(d)
     # a_max = v_max / 1.

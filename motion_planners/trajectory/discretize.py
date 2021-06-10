@@ -1,7 +1,7 @@
 import numpy as np
 
-from motion_planners.tkinter.limits import find_max_velocity, find_max_acceleration
-from motion_planners.retime import spline_start, spline_end
+from motion_planners.trajectory.limits import find_max_velocity, find_max_acceleration
+from motion_planners.trajectory.retime import spline_start, spline_end
 
 from motion_planners.utils import get_distance, INF
 

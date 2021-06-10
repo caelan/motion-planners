@@ -3,7 +3,6 @@ import time
 import numpy as np
 
 from motion_planners.utils import INF, elapsed_time
-from motion_planners.retime import spline_start, spline_end
 
 EPSILON = 1e-6
 

@@ -3,10 +3,10 @@ import time
 
 import numpy as np
 
-from motion_planners.tkinter.limits import check_spline
-from motion_planners.tkinter.discretize import time_discretize_curve
-from motion_planners.parabolic import solve_multi_poly, MultiPPoly, solve_multivariate_ramp, EPSILON
-from motion_planners.retime import trim, spline_duration, append_polys
+from motion_planners.trajectory.limits import check_spline
+from motion_planners.trajectory.discretize import time_discretize_curve
+from motion_planners.trajectory.parabolic import solve_multi_poly, solve_multivariate_ramp, EPSILON
+from motion_planners.trajectory.retime import trim, spline_duration, append_polys
 from motion_planners.utils import INF, elapsed_time, get_pairs, find
 
 def find_lower_bound(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
@@ -36,7 +36,7 @@ def test_spline(best_t, x1, x2, v1, v2):
     ]
     degree = len(observations) - 1
 
-    from numpy import poly1d, polyfit
+    from numpy import poly1d
     terms = []
     for k in range(degree + 1):
         coeffs = np.zeros(degree + 1)
@@ -60,8 +60,10 @@ def test_spline(best_t, x1, x2, v1, v2):
 def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, max_accelerations=None): # a_max
 
     def curve_collision_fn(curve, t0=None, t1=None):
+        # TODO: stage the function to check all the easy things like joint limits first
         if curve is None:
             return True
+        # TODO: can exactly compute limit violations
         if not check_spline(curve, v_max=max_velocities, a_max=None, verbose=False,
                             #start_t=t0, end_t=t1,
                             ):
@@ -80,7 +82,7 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
                  sample=True, intermediate=True, cubic=True, refit=True, num=1000, min_improve=0., max_time=INF):
     # TODO: rename smoothing.py to shortcutting.py
     assert refit or intermediate
-    from scipy.interpolate import CubicHermiteSpline, CubicSpline
+    from scipy.interpolate import CubicHermiteSpline
     start_time = time.time()
     curve_collision_fn = get_curve_collision_fn(collision_fn, max_velocities=v_max, max_accelerations=a_max)
 

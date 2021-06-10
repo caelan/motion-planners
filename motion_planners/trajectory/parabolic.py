@@ -2,10 +2,10 @@ import math
 
 import numpy as np
 
-from motion_planners.retime import curve_from_controls, parabolic_val, check_time, spline_duration, append_polys, \
+from motion_planners.trajectory.retime import curve_from_controls, parabolic_val, check_time, spline_duration, append_polys, \
     MultiPPoly
-from motion_planners.tkinter.limits import maximize_curve, EPSILON
-from motion_planners.utils import INF, get_sign, strictly_increasing, get_pairs
+from motion_planners.trajectory.limits import maximize_curve, EPSILON
+from motion_planners.utils import INF, get_sign, get_pairs
 
 
 def check_curve(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
