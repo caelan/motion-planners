@@ -1,6 +1,8 @@
 import numpy as np
 
 from motion_planners.tkinter.limits import find_max_velocity, find_max_acceleration
+from motion_planners.retime import spline_start, spline_end
+
 from motion_planners.utils import get_distance, INF
 
 
@@ -25,12 +27,14 @@ def filter_proximity(times, positions, resolution=0.):
 
 ##################################################
 
-def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocities=None, time_step=1e-2):
+def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocities=None, verbose=True, time_step=1e-2):
     if start_t is None:
-        start_t = positions_curve.x[0]
+        start_t = spline_start(positions_curve)
     if end_t is None:
-        end_t = positions_curve.x[-1]
-    assert start_t < end_t
+        end_t = spline_end(positions_curve)
+    start_t = max(start_t, spline_start(positions_curve))
+    end_t = min(end_t, spline_end(positions_curve))
+    assert start_t <= end_t
 
     norm = INF
     d = len(positions_curve(start_t))
@@ -42,10 +46,11 @@ def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocit
         a_max_t, max_a = find_max_acceleration(positions_curve, start_t=start_t, end_t=end_t, norm=norm)
         #v_max_t, max_v = INF, np.linalg.norm(V_MAX)
         time_step = resolution / max_v
-        print('Max velocity: {:.3f}/{:.3f} (at time {:.3f}) | Max accel: {:.3f}/{:.3f} (at time {:.3f}) | '
-              'Step: {:.3f} | Duration: {:.3f}'.format(
-            max_v, np.linalg.norm(V_MAX, ord=norm), v_max_t, max_a, np.linalg.norm(A_MAX, ord=norm), a_max_t,
-            time_step, positions_curve.x[-1])) # 2 | INF
+        if verbose:
+            print('Max velocity: {:.3f}/{:.3f} (at time {:.3f}) | Max accel: {:.3f}/{:.3f} (at time {:.3f}) | '
+                  'Step: {:.3f} | Duration: {:.3f}'.format(
+                max_v, np.linalg.norm(V_MAX, ord=norm), v_max_t, max_a, np.linalg.norm(A_MAX, ord=norm), a_max_t,
+                time_step, positions_curve.x[-1])) # 2 | INF
     else:
         time_step = np.min(np.divide(resolutions, max_velocities))
 

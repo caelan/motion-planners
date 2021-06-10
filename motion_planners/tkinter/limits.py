@@ -50,7 +50,7 @@ def old_check_spline(spline, v_max=None, a_max=None, start=None, end=None):
                     return False
     return True
 
-def check_spline(spline, v_max=None, a_max=None, **kwargs):
+def check_spline(spline, v_max=None, a_max=None, verbose=True, **kwargs):
     if (v_max is None) and (a_max is None):
         return True
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PPoly.html#scipy.interpolate.PPoly
@@ -68,7 +68,8 @@ def check_spline(spline, v_max=None, a_max=None, **kwargs):
     if v_max is not None:
         # TODO: maybe the pieces are screwing something
         t, v = find_max_velocity(spline, **kwargs)
-        print('Max velocity: {:.3f}/{:.3f} (at time {:.3f})'.format(v, get_max_velocity(v_max), t))
+        if verbose:
+            print('Max velocity: {:.3f}/{:.3f} (at time {:.3f})'.format(v, get_max_velocity(v_max), t))
         if abs(v) > get_max_velocity(v_max) + EPSILON:
             return False
     return True
