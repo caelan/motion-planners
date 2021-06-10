@@ -5,12 +5,12 @@ import argparse
 import time
 import random
 
-from motion_planners.trajectory.parabolic import opt_straight_line, solve_multivariate_ramp, solve_multi_linear
-from motion_planners.trajectory.retime import spline_duration
-from motion_planners.trajectory.discretize import time_discretize_curve, V_MAX, A_MAX
-from motion_planners.trajectory.limits import get_max_velocity
+from ..trajectory.parabolic import opt_straight_line, solve_multivariate_ramp, solve_multi_linear
+from ..trajectory.retime import spline_duration
+from ..trajectory.discretize import time_discretize_curve, V_MAX, A_MAX
+from ..trajectory.limits import get_max_velocity
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn
-from motion_planners.trajectory.smooth import smooth_curve
+from ..trajectory.smooth import smooth_curve, get_curve_collision_fn
 from .viewer import create_box, draw_environment, add_points, \
     add_roadmap, get_box_center, add_path, create_cylinder, add_timed_path
 from ..utils import user_input, profiler, INF, compute_path_cost, elapsed_time, get_pairs, \
@@ -36,7 +36,7 @@ ALGORITHMS = [
 
 ##################################################
 
-def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
+def retime_path(path, velocity=get_max_velocity(V_MAX), collision_fn=lambda q: False, **kwargs):
     d = len(path[0])
     # v_max = 5.*np.ones(d)
     # a_max = v_max / 1.
@@ -84,10 +84,12 @@ def retime_path(path, velocity=get_max_velocity(V_MAX), **kwargs):
     # print(positions_curve.x)
     # print([positions_curve(t) for t in [t1, t2]])
 
+    curve_collision_fn = get_curve_collision_fn(collision_fn, max_velocities=v_max, max_accelerations=a_max)
     positions_curve = smooth_curve(positions_curve,
                                    #v_max=None, a_max=None,
-                                   v_max=v_max, a_max=a_max,
-                                   **kwargs)
+                                   v_max=v_max,
+                                   a_max=a_max,
+                                   curve_collision_fn=curve_collision_fn, **kwargs)
 
     return positions_curve
 
