@@ -3,7 +3,7 @@ from scipy.spatial.kdtree import KDTree
 
 import numpy as np
 
-from motion_planners.utils import INF, compute_path_cost, get_distance
+from .utils import INF, compute_path_cost, get_distance
 
 # TODO: shared roadmap for multi-query
 

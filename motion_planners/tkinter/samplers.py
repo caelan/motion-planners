@@ -2,8 +2,8 @@ import math
 
 import numpy as np
 
-from motion_planners.tkinter.viewer import is_collision_free, contains, point_collides, sample_line
-from motion_planners.utils import interval_generator, get_distance, get_delta
+from .viewer import is_collision_free, contains, point_collides, sample_line
+from ..utils import interval_generator, get_distance, get_delta
 
 def get_distance_fn(weights):
     difference_fn = get_delta

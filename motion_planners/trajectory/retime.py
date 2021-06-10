@@ -1,6 +1,6 @@
 import numpy as np
 
-from motion_planners.utils import INF, get_pairs, find
+from ..utils import INF, get_pairs, find
 
 
 def check_time(t):
@@ -276,3 +276,14 @@ class MultiPPoly(object):
         return CubicHermiteSpline(times, positions, dydx=velocities, **kwargs)
     def __str__(self):
         return '{}({})'.format(self.__class__.__name__, self.polys)
+
+
+def get_interval(curve, start_t=None, end_t=None):
+    if start_t is None:
+        start_t = spline_start(curve)
+    if end_t is None:
+        end_t = spline_end(curve)
+    start_t = max(start_t, spline_start(curve))
+    end_t = min(end_t, spline_end(curve))
+    assert start_t < end_t
+    return start_t, end_t

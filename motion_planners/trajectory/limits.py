@@ -1,23 +1,24 @@
 import time
 import numpy as np
 
-from motion_planners.utils import INF, elapsed_time
+from ..utils import INF, elapsed_time
+from .retime import get_interval
 
 EPSILON = 1e-6
 
 def get_max_velocity(velocities, norm=INF):
     return np.linalg.norm(velocities, ord=norm)
 
-def old_check_spline(spline, v_max=None, a_max=None, start=None, end=None):
+def old_check_spline(spline, v_max=None, a_max=None, start_idx=None, end_idx=None):
     # TODO: be careful about time vs index (here is index)
     if (v_max is None) and (a_max is None):
         return True
-    if start is None:
-        start = 0
-    if end is None:
-        end = len(spline.x) - 1
+    if start_idx is None:
+        start_idx = 0
+    if end_idx is None:
+        end_idx = len(spline.x) - 1
     signs = [+1, -1]
-    for i in range(start, end):
+    for i in range(start_idx, end_idx):
         t0, t1 = spline.x[i], spline.x[i + 1]
         t0, t1 = 0, (t1 - t0)
         boundary_ts = [t0, t1]
@@ -112,10 +113,7 @@ def minimize_objective(objective, lower, upper, num=100, max_time=INF, max_itera
     return best_t, best_f
 
 def find_max_curve(curve, start_t=None, end_t=None, norm=INF, **kwargs):
-    if start_t is None:
-        start_t = curve.x[0]
-    if end_t is None:
-        end_t = curve.x[-1]
+    start_t, end_t = get_interval(curve, start_t=start_t, end_t=end_t)
     # TODO: curve(t) returns a matrix if passed a vector, which is summed by the INF norm
     objective = lambda t: -np.linalg.norm(curve(t[0]), ord=norm) # 2 | INF
     #objective = lambda t: -np.linalg.norm(curve(t[0]), norm=2)**2 # t[0]
@@ -132,10 +130,7 @@ def find_max_curve(curve, start_t=None, end_t=None, norm=INF, **kwargs):
 ##################################################
 
 def maximize_curve(curve, start_t=None, end_t=None, discontinuity=True, ignore=set()): # fn=None
-    if start_t is None:
-        start_t = curve.x[0]
-    if end_t is None:
-        end_t = curve.x[-1]
+    start_t, end_t = get_interval(curve, start_t=start_t, end_t=end_t)
     #d = curve(start_t)
     derivative = curve.derivative(nu=1)
     times = list(curve.x)

@@ -2,7 +2,7 @@ from itertools import islice
 
 import numpy as np
 
-from motion_planners.search import best_first, bfs
+from .search import best_first, bfs
 
 
 def get_nth(generator, n=0):

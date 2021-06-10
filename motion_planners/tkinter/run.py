@@ -144,7 +144,7 @@ def main():
     seed = args.seed
     if seed is None:
         #seed = random.randint(0, sys.maxsize)
-        seed = random.randint(0, 2**8)
+        seed = random.randint(0, 10**3-1)
     print('Seed:', seed)
     random.seed(seed)
     np.random.seed(seed)
@@ -179,7 +179,7 @@ def main():
 
             path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                          max_time=args.time, max_iterations=INF, num_samples=200,
-                         restarts=2, smooth=100)
+                         restarts=2, smooth=100, algorithm=args.algorithm)
             paths = [] if path is None else [path]
 
             #paths = random_restarts(rrt_connect, start, goal, distance_fn=distance_fn, sample_fn=sample_fn,

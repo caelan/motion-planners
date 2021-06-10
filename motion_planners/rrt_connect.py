@@ -4,6 +4,18 @@ from .primitives import extend_towards
 from .rrt import TreeNode, configs
 from .utils import irange, RRT_ITERATIONS, INF, elapsed_time
 
+def wrap_collision_fn(collision_fn):
+    # TODO: joint limits
+    # import inspect
+    # print(inspect.getargspec(collision_fn))
+    # print(dir(collision_fn))
+    def fn(q1, q2):
+        try:
+            return collision_fn(q1, q2)
+        except TypeError:
+            return collision_fn(q2)
+    return fn
+
 def rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                 max_iterations=RRT_ITERATIONS, max_time=INF, **kwargs):
     """
@@ -22,6 +34,8 @@ def rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
     start_time = time.time()
     if collision_fn(start) or collision_fn(goal):
         return None
+    # TODO: support continuous collision_fn with two arguments
+    #collision_fn = wrap_collision_fn(collision_fn)
     nodes1, nodes2 = [TreeNode(start)], [TreeNode(goal)] # TODO: allow a tree to be prespecified (possibly as start)
     for iteration in irange(max_iterations):
         if elapsed_time(start_time) >= max_time:

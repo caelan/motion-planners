@@ -63,7 +63,8 @@ class PRMViewer(object):
 
 #################################################################
 
-MIN_PROXIMITY = 1e-2
+STEP_SIZE = 1.5e-2
+MIN_PROXIMITY = 1e-3
 
 def contains_box(point, box, buffer=0.):
     (lower, upper) = box
@@ -87,7 +88,7 @@ def contains(point, shape, **kwargs):
 def point_collides(point, obstacles, buffer=MIN_PROXIMITY, **kwargs):
     return any(contains(point, obst, buffer=buffer, **kwargs) for obst in obstacles)
 
-def sample_line(segment, step_size=2e-2):
+def sample_line(segment, step_size=STEP_SIZE):
     (q1, q2) = segment
     diff = get_delta(q1, q2)
     dist = np.linalg.norm(diff)

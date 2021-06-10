@@ -1,9 +1,8 @@
 import numpy as np
 
-from motion_planners.trajectory.limits import find_max_velocity, find_max_acceleration
-from motion_planners.trajectory.retime import spline_start, spline_end
-
-from motion_planners.utils import get_distance, INF
+from .retime import get_interval, spline_duration
+from .limits import find_max_velocity, find_max_acceleration
+from ..utils import get_distance, INF
 
 
 V_MAX = 1.*np.ones(2)
@@ -27,16 +26,9 @@ def filter_proximity(times, positions, resolution=0.):
 
 ##################################################
 
-def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocities=None, verbose=True,
-                          resolution=1e-2, time_step=1e-2):
-    if start_t is None:
-        start_t = spline_start(positions_curve)
-    if end_t is None:
-        end_t = spline_end(positions_curve)
-    start_t = max(start_t, spline_start(positions_curve))
-    end_t = min(end_t, spline_end(positions_curve))
-    assert start_t <= end_t
-
+def time_discretize_curve(positions_curve, max_velocities=None, verbose=True,
+                          resolution=1e-2, **kwargs): # TODO: min_time?
+    start_t, end_t = get_interval(positions_curve, **kwargs)
     norm = INF
     d = len(positions_curve(start_t))
     resolutions = resolution*np.ones(d)
@@ -50,7 +42,7 @@ def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocit
             print('Max velocity: {:.3f}/{:.3f} (at time {:.3f}) | Max accel: {:.3f}/{:.3f} (at time {:.3f}) | '
                   'Step: {:.3f} | Duration: {:.3f}'.format(
                 max_v, np.linalg.norm(V_MAX, ord=norm), v_max_t, max_a, np.linalg.norm(A_MAX, ord=norm), a_max_t,
-                time_step, positions_curve.x[-1])) # 2 | INF
+                time_step, spline_duration(positions_curve))) # 2 | INF
     else:
         time_step = np.min(np.divide(resolutions, max_velocities))
 
@@ -68,14 +60,10 @@ def time_discretize_curve(positions_curve, start_t=None, end_t=None, max_velocit
     return times, positions
 
 
-def derivative_discretize_curve(positions_curve, start_t=None, end_t=None, resolution=1e-2, time_step=1e-3):
+def derivative_discretize_curve(positions_curve, start_t=None, end_t=None, resolution=1e-2, time_step=1e-3, **kwargs):
     d = positions_curve.c.shape[-1]
     resolutions = resolution*np.ones(d)
-    if start_t is None:
-        start_t = positions_curve.x[0]
-    if end_t is None:
-        end_t = positions_curve.x[-1]
-    assert start_t < end_t
+    start_t, end_t = get_interval(positions_curve, **kwargs)
     velocities_curve = positions_curve.derivative()
     #acceleration_curve = velocities_curve.derivative()
     times = [start_t]
@@ -93,13 +81,9 @@ def derivative_discretize_curve(positions_curve, start_t=None, end_t=None, resol
     return times, positions
 
 
-def integral_discretize_curve(positions_curve, start_t=None, end_t=None, resolution=1e-2):
+def integral_discretize_curve(positions_curve, resolution=1e-2, **kwargs):
     #from scipy.integrate import quad
-    if start_t is None:
-        start_t = positions_curve.x[0]
-    if end_t is None:
-        end_t = positions_curve.x[-1]
-    assert start_t < end_t
+    start_t, end_t = get_interval(positions_curve, **kwargs)
     distance_curve = positions_curve.antiderivative()
     #distance = positions_curve.integrate(a, b)
     # TODO: compute a total distance curve

@@ -3,11 +3,11 @@ import time
 
 import numpy as np
 
-from motion_planners.trajectory.limits import check_spline
-from motion_planners.trajectory.discretize import time_discretize_curve
-from motion_planners.trajectory.parabolic import solve_multi_poly, solve_multivariate_ramp, EPSILON
-from motion_planners.trajectory.retime import trim, spline_duration, append_polys
-from motion_planners.utils import INF, elapsed_time, get_pairs, find
+from .limits import check_spline
+from .discretize import time_discretize_curve
+from .parabolic import solve_multi_poly, solve_multivariate_ramp, EPSILON
+from .retime import trim, spline_duration, append_polys
+from ..utils import INF, elapsed_time, get_pairs, find
 
 def find_lower_bound(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
     d = len(x1)
@@ -139,8 +139,8 @@ def smooth_curve(start_curve, v_max, a_max, curve_collision_fn=lambda *args, **k
         #best_t += 1e-3
         #print(min_t, best_t, current_t)
         local_durations = [t1 - times[i1], best_t, times[i2] - t2]
-        local_times = [0, best_t]
-        #local_times = [t1, (t1 + best_t)]
+        #local_times = [0, best_t]
+        local_times = [t1, (t1 + best_t)] # Good if the collision function is time sensitive
 
         if intermediate:
             if cubic:
@@ -201,6 +201,6 @@ def smooth_curve(start_curve, v_max, a_max, curve_collision_fn=lambda *args, **k
             iteration, spline_duration(curve), spline_duration(new_curve), elapsed_time(start_time)))
         curve = new_curve
     print('Iterations: {} | Start time: {:.3f} | End time: {:.3f} | Elapsed time: {:.3f}'.format(
-        num, start_curve.x[-1], curve.x[-1], elapsed_time(start_time)))
+        num, spline_duration(start_curve), spline_duration(curve), elapsed_time(start_time)))
     check_spline(curve, v_max, a_max)
     return curve
