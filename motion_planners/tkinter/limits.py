@@ -69,7 +69,7 @@ def check_spline(spline, v_max=None, a_max=None, verbose=True, **kwargs):
         # TODO: maybe the pieces are screwing something
         t, v = find_max_velocity(spline, **kwargs)
         violation = abs(v) > get_max_velocity(v_max) + EPSILON
-        if violation or verbose:
+        if verbose: # or violation:
             print('Violation: {} | Max velocity: {:.3f}/{:.3f} (at time {:.3f})'.format(
                 violation, v, get_max_velocity(v_max), t))
         if violation:

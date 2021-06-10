@@ -77,7 +77,7 @@ def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, ma
 
 
 def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: False,
-                 intermediate=True, cubic=True, refit=False, num=1000, min_improve=1e-3, max_time=INF):
+                 sample=True, intermediate=True, cubic=True, refit=True, num=1000, min_improve=0., max_time=INF):
     # TODO: rename smoothing.py to shortcutting.py
     assert refit or intermediate
     from scipy.interpolate import CubicHermiteSpline, CubicSpline
@@ -120,17 +120,23 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
         #min_t = 0
         min_t = find_lower_bound(x1, x2, v1, v2, v_max=v_max, a_max=a_max)
         #min_t = optimistic_time(x1, x2, v_max=v_max, a_max=a_max)
-        max_t = (t2 - t1) - min_improve
-        if min_t >= max_t: # TODO: also limit the distance/duration between these two points
+        current_t = (t2 - t1) - min_improve
+        if min_t >= current_t: # TODO: also limit the distance/duration between these two points
             continue
 
-        #best_t = random.uniform(min_t, max_t)
-        best_t = solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max)
         #best_t = min_t
-        if (best_t is None) or (best_t >= max_t):
+        if sample:
+            max_t = current_t
+            ramp_t = solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max)
+            ramp_t = INF if ramp_t is None else ramp_t
+            max_t = min(max_t, ramp_t)
+            best_t = random.uniform(min_t, max_t)
+        else:
+            best_t = solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max)
+        if (best_t is None) or (best_t >= current_t):
             continue
         #best_t += 1e-3
-        #print(min_t, best_t, max_t)
+        #print(min_t, best_t, current_t)
         spliced_durations = [t1 - times[i1], best_t, times[i2] - t2]
         spliced_times = [0, best_t]
         #spliced_times = [t1, (t1 + best_t)]
@@ -142,7 +148,7 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
                 local_positions_curve = solve_multi_poly(times=spliced_times, positions=spliced_positions,
                                                        velocities=spliced_velocities,
                                                        v_max=v_max, a_max=a_max)
-            if (local_positions_curve is None) or (spline_duration(local_positions_curve) >= max_t) \
+            if (local_positions_curve is None) or (spline_duration(local_positions_curve) >= current_t) \
                     or curve_collision_fn(local_positions_curve, t0=None, t1=None):
                 continue
             # print(new_positions_curve.hermite_spline().c[0,...])
@@ -167,7 +173,7 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
             else:
                 new_positions_curve = solve_multi_poly(new_times, new_positions, new_velocities, v_max, a_max)
             if (new_positions_curve is None) or (spline_duration(new_positions_curve) >= spline_duration(positions_curve)) \
-                    or curve_collision_fn(new_positions_curve, t0=None, t1=None):
+                    or (not intermediate and curve_collision_fn(new_positions_curve, t0=None, t1=None)):
                 continue
         else:
             assert intermediate
@@ -183,7 +189,7 @@ def smooth_curve(start_positions_curve, v_max, a_max, collision_fn=lambda q: Fal
             # print(new_positions_curve.c[...,0])
             pre_curve = trim(positions_curve, end=t1)
             post_curve = trim(positions_curve, start=t2)
-            new_positions_curve = append_polys(pre_curve, local_positions_curve, post_curve) # TODO: the numerics of
+            new_positions_curve = append_polys(pre_curve, local_positions_curve, post_curve) # TODO: the numerics are throwing this off?
             # print(new_positions_curve.x)
             # print(new_positions_curve.c[...,0])
             #assert(not curve_collision_fn(new_positions_curve, t0=None, t1=None))
