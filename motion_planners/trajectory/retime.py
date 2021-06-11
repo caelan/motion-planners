@@ -3,6 +3,13 @@ import numpy as np
 from ..utils import INF, get_pairs, find
 
 
+EPSILON = 1e-6
+
+
+def get_max_velocity(velocities, norm=INF):
+    return np.linalg.norm(velocities, ord=norm)
+
+
 def check_time(t):
     return not isinstance(t, complex) and (t >= 0.)
 
@@ -80,6 +87,7 @@ def spline_end(spline):
 def spline_duration(spline):
     return spline_end(spline) - spline_start(spline)
 
+
 def get_interval(curve, start_t=None, end_t=None):
     if start_t is None:
         start_t = spline_start(curve)
@@ -89,6 +97,10 @@ def get_interval(curve, start_t=None, end_t=None):
     end_t = min(end_t, spline_end(curve))
     assert start_t < end_t
     return start_t, end_t
+
+
+def poly_from_spline(spline, i, d):
+    return np.poly1d([spline.c[c, i, d] for c in range(spline.c.shape[0])])
 
 ##################################################
 

@@ -1,16 +1,9 @@
 import time
 import numpy as np
 
+from .retime import EPSILON, get_max_velocity, poly_from_spline
 from ..utils import INF, elapsed_time
 from .retime import get_interval
-
-EPSILON = 1e-6
-
-def get_max_velocity(velocities, norm=INF):
-    return np.linalg.norm(velocities, ord=norm)
-
-def poly_from_spline(spline, i, d):
-    return np.poly1d([spline.c[c, i, d] for c in range(spline.c.shape[0])])
 
 def old_check_spline(spline, v_max=None, a_max=None, start_idx=None, end_idx=None):
     # TODO: be careful about time vs index (here is index)
@@ -52,7 +45,7 @@ def old_check_spline(spline, v_max=None, a_max=None, start_idx=None, end_idx=Non
                     return False
     return True
 
-def check_spline(spline, v_max=None, a_max=None, verbose=True, **kwargs):
+def check_spline(spline, v_max=None, a_max=None, verbose=False, **kwargs):
     if (v_max is None) and (a_max is None):
         return True
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PPoly.html#scipy.interpolate.PPoly

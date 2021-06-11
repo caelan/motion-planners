@@ -48,8 +48,8 @@ def time_discretize_curve(positions_curve, max_velocities=None,
         v_max_t, max_v = find_max_velocity(positions_curve, start_t=start_t, end_t=end_t, norm=norm)
         a_max_t, max_a = find_max_acceleration(positions_curve, start_t=start_t, end_t=end_t, norm=norm)
         #v_max_t, max_v = INF, np.linalg.norm(V_MAX)
-        time_step = min(np.divide(resolution, max_v))
-        time_step = 0.1*time_step
+        time_step = min(np.divide(resolutions, max_v))
+        #time_step = 0.1*time_step
         if verbose:
             print('Max velocity: {:.3f}/{:.3f} (at time {:.3f}) | Max accel: {:.3f}/{:.3f} (at time {:.3f}) | '
                   'Step: {:.3f} | Duration: {:.3f}'.format(

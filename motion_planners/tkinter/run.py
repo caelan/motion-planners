@@ -6,7 +6,7 @@ import time
 import random
 
 from ..meta import solve
-from ..trajectory.parabolic import solve_multi_linear
+from ..trajectory.linear import solve_multi_linear
 from ..trajectory.discretize import time_discretize_curve, V_MAX, A_MAX
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn
 from ..trajectory.smooth import smooth_curve, get_curve_collision_fn
@@ -220,7 +220,7 @@ def main():
 
             if args.smooth:
                 for path in paths:
-                    extend_fn, roadmap = get_extend_fn(obstacles=obstacles)  # obstacles | []
+                    extend_fn, roadmap = get_extend_fn(environment, obstacles=obstacles)  # obstacles | []
                     smoothed = smooth_path(path, extend_fn, collision_fn, max_iterations=INF, max_time=args.time)
                     print('Smoothed distance_fn: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
                     add_path(viewer, smoothed, color='red')
