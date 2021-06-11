@@ -12,32 +12,44 @@ A_MAX = (V_MAX - 0.) / (0.25 - 0.)
 
 ##################################################
 
-def filter_proximity(times, positions, resolution=0.):
+def filter_proximity(times, positions, resolutions):
     assert len(times) == len(positions)
-    new_times = []
-    new_positions = []
-    for t, position in zip(times, positions):
-        if not new_positions or (get_distance(new_positions[-1], position) >= resolution): # TODO: add first before exceeding
-            new_times.append(t)
-            new_positions.append(position)
-    # new_times.append(times[-1])
-    # new_positions.append(positions_curve(new_times[-1]))
+    if len(times) <= 2:
+        return times, positions
+    new_times = [times[0]]
+    new_positions = [positions[0]]
+    for idx in range(1, len(times)-1):
+        # TODO: search a list of existing samples (such as knot points)
+        current_delta = np.absolute(get_distance(positions[idx], new_positions[-1]) / resolutions)
+        next_delta = np.absolute(get_distance(positions[idx+1], new_positions[-1]) / resolutions)
+        if (current_delta >= 1).any() or (next_delta >= 1).any():
+            new_times.append(times[idx])
+            new_positions.append(positions[idx])
+    new_times.append(times[-1])
+    new_positions.append(positions[-1])
     return new_times, new_positions
 
 ##################################################
 
-def time_discretize_curve(positions_curve, max_velocities=None, verbose=True,
-                          resolution=1e-2, **kwargs): # TODO: min_time?
+def inf_norm(vector):
+    #return max(map(abs, vector))
+    return np.linalg.norm(vector, ord=INF)
+
+def time_discretize_curve(positions_curve, max_velocities=None,
+                          resolution=1e-2, verbose=True, **kwargs): # TODO: min_time?
     start_t, end_t = get_interval(positions_curve, **kwargs)
     norm = INF
     d = len(positions_curve(start_t))
-    resolutions = resolution*np.ones(d)
+    resolutions = resolution
+    if np.isscalar(resolution):
+        resolutions = resolution*np.ones(d)
     if max_velocities is None:
         # TODO: adjust per trajectory segment
         v_max_t, max_v = find_max_velocity(positions_curve, start_t=start_t, end_t=end_t, norm=norm)
         a_max_t, max_a = find_max_acceleration(positions_curve, start_t=start_t, end_t=end_t, norm=norm)
         #v_max_t, max_v = INF, np.linalg.norm(V_MAX)
-        time_step = resolution / max_v
+        time_step = min(np.divide(resolution, max_v))
+        time_step = 0.1*time_step
         if verbose:
             print('Max velocity: {:.3f}/{:.3f} (at time {:.3f}) | Max accel: {:.3f}/{:.3f} (at time {:.3f}) | '
                   'Step: {:.3f} | Duration: {:.3f}'.format(
@@ -47,8 +59,6 @@ def time_discretize_curve(positions_curve, max_velocities=None, verbose=True,
         time_step = np.min(np.divide(resolutions, max_velocities))
 
     times = np.append(np.arange(start_t, end_t, step=time_step), [end_t])
-    #times = positions_curve.x
-    #velocities_curve = positions_curve.derivative()
     positions = [positions_curve(t) for t in times]
     times, positions = filter_proximity(times, positions, resolution)
     return times, positions

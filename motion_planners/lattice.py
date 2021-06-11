@@ -6,7 +6,7 @@ from .search import best_first, bfs
 
 
 def get_nth(generator, n=0):
-    return next(islice(generator, n, None))
+    return next(islice(generator, n), None)
 
 
 def get_neighbors_fn(extend_fn, targets=[], scale=1e3, bias=False): # TODO: could also include diagonal

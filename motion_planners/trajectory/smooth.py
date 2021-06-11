@@ -32,10 +32,10 @@ def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, ma
         if curve is None:
             return True
         # TODO: can exactly compute limit violations
-        if not check_spline(curve, v_max=max_velocities, a_max=None, verbose=False,
-                            #start_t=t0, end_t=t1,
-                            ):
-            return True
+        # if not check_spline(curve, v_max=max_velocities, a_max=None, verbose=False,
+        #                     #start_t=t0, end_t=t1,
+        #                     ):
+        #     return True
         _, samples = time_discretize_curve(curve, verbose=False,
                                            start_t=t0, end_t=t1,
                                            #max_velocities=v_max,
@@ -47,10 +47,11 @@ def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, ma
 
 ##################################################
 
-def smooth_curve(start_curve, v_max, a_max, curve_collision_fn=lambda *args, **kwargs: False,
+def smooth_curve(start_curve, v_max, a_max, curve_collision_fn,
                  sample=True, intermediate=True, cubic=True, refit=True, num=1000, min_improve=0., max_time=INF):
     # TODO: rename smoothing.py to shortcutting.py
     # TODO: default v_max and a_max
+    assert (num < INF) or (max_time < INF)
     assert refit or intermediate
     from scipy.interpolate import CubicHermiteSpline
     start_time = time.time()
@@ -80,7 +81,7 @@ def smooth_curve(start_curve, v_max, a_max, curve_collision_fn=lambda *args, **k
 
         local_positions = [curve(t) for t in ts]
         local_velocities = [curve(t, nu=1) for t in ts]
-        #print(local_velocities)
+        #print(local_velocities, v_max)
         assert all(np.less_equal(np.absolute(v), v_max + EPSILON).all() for v in local_velocities)
         #if any(np.greater(np.absolute(v), v_max).any() for v in local_velocities):
         #    continue # TODO: do the same with collisions
@@ -143,7 +144,8 @@ def smooth_curve(start_curve, v_max, a_max, curve_collision_fn=lambda *args, **k
             else:
                 new_curve = solve_multi_poly(new_times, new_positions, new_velocities, v_max, a_max)
             if (new_curve is None) or (spline_duration(new_curve) >= spline_duration(curve)) \
-                    or (not intermediate and curve_collision_fn(new_curve, t0=None, t1=None)):
+                    or not check_spline(new_curve, v_max, a_max) or \
+                    (not intermediate and curve_collision_fn(new_curve, t0=None, t1=None)):
                 continue
         else:
             assert intermediate

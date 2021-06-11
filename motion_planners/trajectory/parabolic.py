@@ -5,10 +5,10 @@ import numpy as np
 from .retime import curve_from_controls, parabolic_val, check_time, spline_duration, append_polys, \
     MultiPPoly
 from .limits import maximize_curve, EPSILON
-from ..utils import INF, get_sign, get_pairs
-
+from ..utils import INF, get_sign, get_pairs, waypoints_from_path
 
 def check_curve(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
+    assert p_curve is not None
     end_times = np.append(p_curve.x[:1], p_curve.x[-1:])
     v_curve = p_curve.derivative()
     # print()
@@ -40,6 +40,23 @@ def acceleration_cost(p_curve, **kwargs):
     max_t, max_a = maximize_curve(a_curve, **kwargs)
     return max_a
 
+def zero_one_fixed(x1, x2, T, v_max=INF):
+    from scipy.interpolate import PPoly
+    assert 0 < v_max < INF
+    sign = get_sign(x2 - x1)
+    d = abs(x2 - x1)
+    v = d / T
+    if v > v_max + EPSILON:
+        return None
+    dt = EPSILON
+    t_hold = T - 2*dt
+    v = d / t_hold
+    #return zero_three_stage(x1, x2, T, v_max=v_max, a_max=1e6) # NOTE: approximation
+    coeffs = [[0., x1], [sign*v, x1], [0., x2]]
+    times = [0., dt, dt + t_hold, T]
+    p_curve = PPoly(c=np.array(coeffs).T, x=times) # Not differentiable
+    return p_curve
+
 def zero_two_ramp(x1, x2, T, v_max=INF, a_max=INF):
     sign = get_sign(x2 - x1)
     d = abs(x2 - x1)
@@ -67,9 +84,11 @@ def zero_three_stage(x1, x2, T, v_max=INF, a_max=INF):
     solutions = [t for t in solutions if (T - 2*t) >= 0]
     if not solutions:
         return None
-    t1 = t3 = min(solutions)
+    t1 = min(solutions)
     if t1*a_max > v_max + EPSILON:
         return None
+    #t1 = min(t1, v_max / a_max)
+    t3 = t1
     t2 = T - t1 - t3 # Lower velocity
     durations = [t1, t2, t3]
     accels = [sign * a_max, 0., -sign * a_max]
@@ -81,11 +100,19 @@ def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0.):
     # TODO: solve for all joints at once using a linear interpolator
     # Can always rest at the start of the trajectory if need be
     # Exploits symmetry
-    assert (v_max >= 0) and (a_max >= 0)
+    assert (v_max > 0.) and (a_max > 0.)
+    assert (v_max < INF) or (a_max < INF)
     #v_max = abs(x2 - x1) / abs(v_max)
     d = abs(x2 - x1)
     # if v_max == INF:
     #     raise NotImplementedError()
+
+    if a_max == INF:
+        T = d / v_max
+        T += 2 * EPSILON
+        p_curve = zero_one_fixed(x1, x2, T, v_max=v_max)
+        check_curve(p_curve, x1, x2, v1=0., v2=0., T=T, v_max=v_max, a_max=a_max)
+        return p_curve
 
     t_accel = math.sqrt(d / a_max) # 1/2.*a*t**2 = d/2.
     if a_max*t_accel <= v_max:
@@ -269,6 +296,7 @@ def solve_multi_poly(times, positions, velocities, v_max, a_max, **kwargs):
 
 def solve_multi_linear(positions, v_max, a_max, **kwargs):
     from scipy.interpolate import PPoly
+    positions = waypoints_from_path(positions, **kwargs)
     d = len(positions[0])
     assert len(v_max) == len(a_max)
     splines = []
@@ -288,7 +316,7 @@ def solve_multi_linear(positions, v_max, a_max, **kwargs):
 
 def quickest_stage(x1, x2, v1, v2, v_max=INF, a_max=INF, min_t=0.):
     # TODO: handle infinite acceleration
-    assert (v_max >= 0.) and (a_max >= 0.)
+    assert (v_max > 0.) and (a_max > 0.)
     assert all(abs(v) <= v_max + EPSILON for v in [v1, v2])
     if (v_max == INF) and (a_max == INF):
         T = 0
