@@ -39,6 +39,8 @@ def smooth_curve(start_curve, v_max, a_max, curve_collision_fn,
     # TODO: default v_max and a_max
     assert (num < INF) or (max_time < INF)
     assert refit or intermediate
+    # TODO: https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.UnivariateSpline.html
+    #from scipy.interpolate import UnivariateSpline, LSQUnivariateSpline, LSQBivariateSpline
     from scipy.interpolate import CubicHermiteSpline
     start_time = time.time()
 

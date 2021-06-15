@@ -22,6 +22,7 @@ def direct_path(start, goal, extend_fn, collision_fn):
     """
     # TODO: version which checks whether the segment is valid
     if collision_fn(start) or collision_fn(goal):
+        # TODO: return False
         return None
     path = list(extend_fn(start, goal))
     path = [start] + path
@@ -34,6 +35,11 @@ def direct_path(start, goal, extend_fn, collision_fn):
     #         return None
     #     path.append(q)
     # return path
+
+def check_direct(start, goal, extend_fn, collision_fn):
+    if any(collision_fn(q) for q in [start, goal]):
+        return False
+    return direct_path(start, goal, extend_fn, collision_fn)
 
 #################################################################
 
@@ -53,9 +59,9 @@ def random_restarts(solve_fn, start, goal, distance_fn, sample_fn, extend_fn, co
     """
     start_time = time.time()
     solutions = []
-    if any(collision_fn(q) for q in [start, goal]):
-        return solutions
-    path = direct_path(start, goal, extend_fn, collision_fn)
+    path = check_direct(start, goal, extend_fn, collision_fn)
+    if path is False:
+        return None
     if path is not None:
         solutions.append(path)
 
@@ -67,8 +73,8 @@ def random_restarts(solve_fn, start, goal, distance_fn, sample_fn, extend_fn, co
                         max_time=attempt_time, **kwargs)
         if path is None:
             continue
-        if smooth is not None:
-            path = smooth_path(path, extend_fn, collision_fn, max_iterations=smooth)
+        path = smooth_path(path, extend_fn, collision_fn, max_iterations=smooth,
+                           max_time=max_time-elapsed_time(start_time))
         solutions.append(path)
         if compute_path_cost(path, distance_fn) < success_cost:
             break
@@ -83,11 +89,14 @@ def solve_and_smooth(solve_fn, q1, q2, distance_fn, sample_fn, extend_fn, collis
 #################################################################
 
 def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorithm='birrt',
-          max_time=INF, max_iterations=INF, num_samples=100, **kwargs):
+          max_time=INF, max_iterations=INF, num_samples=100, smooth=None, **kwargs):
     # TODO: allow distance_fn to be skipped
-    # TODO: check the start and goal
-    # TODO: test the straight line
     # TODO: return lambda function
+    start_time = time.time()
+    path = check_direct(start, goal, extend_fn, collision_fn)
+    if path is not None:
+        return path
+    #max_time -= elapsed_time(start_time)
     if algorithm == 'prm':
         path = prm(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                    num_samples=num_samples)
@@ -101,8 +110,9 @@ def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorith
         path = rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                            max_iterations=INF, max_time=max_time)
     elif algorithm == 'birrt':
+        # TODO: checks the straight-line twice
         path = birrt(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
-                     max_iterations=INF, max_time=max_time, **kwargs) # restarts=2, smooth=100
+                     max_iterations=INF, max_time=max_time, smooth=None, **kwargs) # restarts=2
     elif algorithm == 'rrt_star':
         path = rrt_star(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, radius=1,
                         max_iterations=INF, max_time=max_time)
@@ -110,5 +120,4 @@ def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorith
         path = lattice(start, goal, extend_fn, collision_fn, distance_fn=distance_fn, max_time=INF)
     else:
         raise NotImplementedError(algorithm)
-    # TODO: postprocessing
-    return path
+    return smooth_path(path, extend_fn, collision_fn, max_iterations=smooth, max_time=max_time-elapsed_time(start_time))

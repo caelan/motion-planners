@@ -64,10 +64,10 @@ def time_discretize_curve(positions_curve, max_velocities=None,
     return times, positions
 
     # TODO: bug here (just use knot points instead?)
-    times.extend(np.hstack(positions_curve.derivative().roots(discontinuity=True))) # TODO: make these points special within filter proximity
-    times = sorted(set(times))
-    positions = [positions_curve(t) for t in times]
-    return times, positions
+    # times.extend(np.hstack(positions_curve.derivative().roots(discontinuity=True))) # TODO: make these points special within filter proximity
+    # times = sorted(set(times))
+    # positions = [positions_curve(t) for t in times]
+    # return times, positions
 
 
 def derivative_discretize_curve(positions_curve, start_t=None, end_t=None, resolution=1e-2, time_step=1e-3, **kwargs):

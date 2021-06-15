@@ -30,6 +30,7 @@ ALGORITHMS = [
     birrt,
     rrt_star,
     lattice,
+    # TODO: RRT in position/velocity space using spline interpolation
     # TODO: https://ompl.kavrakilab.org/planners.html
 ]
 
@@ -46,7 +47,7 @@ def dump_spline(positions_curve):
     for d in range(positions_curve.c.shape[-1]):
         print(d, positions_curve.c[..., d])
 
-def retime_path(path, collision_fn=lambda q: False, **kwargs):
+def retime_path(path, collision_fn=lambda q: False, smooth=False, **kwargs):
     d = len(path[0])
     # v_max = 5.*np.ones(d)
     # a_max = v_max / 1.
@@ -55,20 +56,22 @@ def retime_path(path, collision_fn=lambda q: False, **kwargs):
 
     waypoints = remove_redundant(path)
     waypoints = waypoints_from_path(waypoints)
+    positions_curve = solve_multi_linear(waypoints, v_max, a_max)
+    if not smooth:
+        return positions_curve
 
     # durations = [0.] + [get_distance(*pair) / velocity for pair in get_pairs(waypoints)]
     # durations = [0.] + [solve_multivariate_ramp(x1, x2, np.zeros(d), np.zeros(d), v_max, a_max)
     #                     for x1, x2 in get_pairs(waypoints)]
     # durations = [0.] + [max(spline_duration(opt_straight_line(x1[k], x2[k], v_max=v_max[k], a_max=a_max[k])) for k in range(d))
     #                    for x1, x2 in get_pairs(waypoints)] # min_linear_spline | opt_straight_line
+    # times = np.cumsum(durations)
 
-    #times = np.cumsum(durations)
     #positions_curve = interp1d(times, waypoints, kind='quadratic', axis=0) # linear | slinear | quadratic | cubic
     #positions_curve = CubicSpline(times, waypoints, bc_type='clamped')
     #velocities = [np.zeros(len(waypoint)) for waypoint in waypoints]
     #positions_curve = CubicHermiteSpline(times, waypoints, dydx=velocities)
 
-    positions_curve = solve_multi_linear(waypoints, v_max, a_max)
     #positions_curve = MultiPPoly.from_poly(positions_curve)
     #positions_curve = solve_multi_poly(times, waypoints, velocities, v_max, a_max)
     #positions_curve = positions_curve.spline()
@@ -128,7 +131,7 @@ def main():
     Creates and solves the 2D motion planning problem.
     """
     # https://github.com/caelan/pddlstream/blob/master/examples/motion/run.py
-    # TODO: 3D work and CSpace
+    # TODO: 3D workspace and CSpace
     # TODO: visualize just the tool frame of an end effector
 
     np.set_printoptions(precision=3)
@@ -147,6 +150,7 @@ def main():
                         help='The random seed to use.')
     args = parser.parse_args()
     print(args)
+    # TODO: matplotlib viewer
 
     seed = args.seed
     if seed is None:
@@ -186,7 +190,7 @@ def main():
 
             path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                          max_time=args.time, max_iterations=INF, num_samples=200,
-                         restarts=2, smooth=100, algorithm=args.algorithm)
+                         restarts=2, smooth=0, algorithm=args.algorithm)
             paths = [] if path is None else [path]
 
             #paths = random_restarts(rrt_connect, start, goal, distance_fn=distance_fn, sample_fn=sample_fn,
@@ -211,7 +215,7 @@ def main():
                 path = waypoints_from_path(path)
                 add_path(viewer, path, color='green')
                 #curve = interpolate_path(path) # , collision_fn=collision_fn)
-                curve = retime_path(path, collision_fn=collision_fn)
+                curve = retime_path(path, collision_fn=collision_fn, smooth=True)
                 times, path = time_discretize_curve(curve)
                 times = [np.linalg.norm(curve(t, nu=1), ord=INF) for t in times]
                 #add_points(viewer, [curve(t) for t in curve.x])

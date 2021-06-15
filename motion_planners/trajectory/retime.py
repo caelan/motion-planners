@@ -73,6 +73,7 @@ def append_polys(poly1, *polys):
 ##################################################
 
 def get_times(curve):
+    # TODO: rename these
     return curve.x
 
 

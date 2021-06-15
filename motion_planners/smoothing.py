@@ -16,6 +16,8 @@ def smooth_path_old(path, extend_fn, collision_fn, max_iterations=50, max_time=I
     :param kwargs: Keyword arguments
     :return: Path [q', ..., q"] or None if unable to find a solution
     """
+    if (path is None) or (max_iterations is None):
+        return path
     assert (max_iterations < INF) or (max_time < INF)
     start_time = time.time()
     smoothed_path = path
@@ -54,6 +56,8 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, max_iterations=
     """
     # TODO: makes an assumption on the distance_fn metric
     # TODO: smooth until convergence
+    if (path is None) or (max_iterations is None):
+        return path
     assert (max_iterations < INF) or (max_time < INF)
     start_time = time.time()
     if distance_fn is None:
