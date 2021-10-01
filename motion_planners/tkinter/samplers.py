@@ -13,12 +13,13 @@ def get_distance_fn(weights):
     return fn
 
 
-def get_sample_fn(region, obstacles=[], use_halton=True): #, check_collisions=False):
+def get_sample_fn(region, obstacles=[], **kwargs): #, check_collisions=False):
+    # TODO: additional rejection function
     # TODO: Gaussian sampling for narrow passages
     samples = []
     collision_fn, _ = get_collision_fn(region, obstacles)
     lower, upper = region
-    generator = interval_generator(lower, upper, use_halton=use_halton)
+    generator = interval_generator(lower, upper, **kwargs)
 
     def region_gen():
         #area = np.product(upper - lower) # TODO: sample_fn proportional to area
@@ -57,6 +58,8 @@ def get_threshold_fn(d=2):
 
 def get_collision_fn(environment, obstacles):
     cfree = []
+    # TODO: KDTree for hyperspheres
+    # TODO: Signed Distance Function (SDF)
 
     def collision_fn(q):
         #time.sleep(1e-3)

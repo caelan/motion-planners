@@ -126,6 +126,38 @@ def problem1():
 
 ##################################################
 
+def solve_lazy_prm(viewer, start, goal, sample_fn, extend_fn, collision_fn, radius=4, **kwargs):
+    path, samples, edges, colliding_vertices, colliding_edges = \
+        lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, **kwargs)
+    # add_roadmap(viewer, roadmap, color='black') # TODO: seems to have fewer edges than it should
+    # add_roadmap(viewer, [(samples[v1], samples[v2]) for v1, v2 in edges], color='black')
+
+    for v1, v2 in edges:
+        if (colliding_vertices.get(v1, False) is True) or (colliding_vertices.get(v2, False) is True):
+            colliding_edges[v1, v2] = True
+
+    red_edges = [(samples[v1], samples[v2]) for (v1, v2), c in colliding_edges.items() if c is True]
+    green_edges = [(samples[v1], samples[v2]) for (v1, v2), c in colliding_edges.items() if c is False]
+    blue_edges = [(samples[v1], samples[v2]) for v1, v2 in edges if (v1, v2) not in colliding_edges]
+    add_roadmap(viewer, red_edges, color='red')
+    add_roadmap(viewer, green_edges, color='green')
+    add_roadmap(viewer, blue_edges, color='blue')
+    print('Edges | Colliding: {}/{} | CFree: {}/{} | Unchecked: {}/{}'.format(
+        len(red_edges), len(edges), len(green_edges), len(edges), len(blue_edges), len(edges)))
+
+    red_vertices = [samples[v] for v, c in colliding_vertices.items() if c is True]
+    green_vertices = [samples[v] for v, c in colliding_vertices.items() if c is False]
+    blue_vertices = [s for i, s, in enumerate(samples) if i not in colliding_vertices]
+    add_points(viewer, red_vertices, color='red', radius=radius)
+    add_points(viewer, green_vertices, color='green', radius=radius)
+    add_points(viewer, blue_vertices, color='blue', radius=radius)
+    print('Vertices | Colliding: {}/{} | CFree: {}/{} | Unchecked: {}/{}'.format(
+        len(red_vertices), len(samples), len(green_vertices), len(samples), len(blue_vertices), len(samples)))
+    return path
+
+##################################################
+
+
 def main():
     """
     Creates and solves the 2D motion planning problem.
@@ -163,6 +195,7 @@ def main():
     #########################
 
     start, goal, regions, obstacles = problem1()
+    #obstacles = []
     environment = regions['env']
     if isinstance(goal, str) and (goal in regions):
         goal = get_box_center(regions[goal])
@@ -178,21 +211,26 @@ def main():
 
     #connected_test, roadmap = get_connected_test(obstacles)
     distance_fn = get_distance_fn(weights=[1, 1]) # distance_fn
+    min_distance = distance_fn(start, goal)
+    print('Distance: {:.3f}'.format(min_distance))
 
     # samples = list(islice(region_gen('env'), 100))
-    with profiler(field='cumtime'): # cumtime | tottime
+    with profiler(field='tottime'): # cumtime | tottime
         # TODO: cost bound & best cost
         for _ in range(args.restarts+1):
             start_time = time.time()
             collision_fn, cfree = get_collision_fn(environment, obstacles)
-            sample_fn, samples = get_sample_fn(environment, obstacles=[], use_halton=False) # obstacles
+            sample_fn, samples = get_sample_fn(environment, obstacles=[], use_halton=True) # obstacles
             extend_fn, roadmap = get_extend_fn(environment, obstacles=obstacles)  # obstacles | []
 
             path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                          max_time=args.time, max_iterations=INF, num_samples=200,
                          restarts=2, smooth=0, algorithm=args.algorithm)
-            paths = [] if path is None else [path]
 
+            #path = solve_lazy_prm(viewer, start, goal, sample_fn, extend_fn, collision_fn,
+            #                      num_samples=200, max_time=args.time, max_cost=1.25*min_distance)
+
+            paths = [] if path is None else [path]
             #paths = random_restarts(rrt_connect, start, goal, distance_fn=distance_fn, sample_fn=sample_fn,
             #                         extend_fn=extend_fn, collision_fn=collision_fn, restarts=INF,
             #                         max_time=args.time, max_solutions=INF, smooth=100) #, smooth=1000, **kwargs)
@@ -210,12 +248,14 @@ def main():
 
             print('Solutions ({}): {} | Time: {:.3f}'.format(len(paths), [(len(path), round(compute_path_cost(
                 path, distance_fn), 3)) for path in paths], elapsed_time(start_time)))
-            for path in paths:
+            for i, path in enumerate(paths):
+                cost = compute_path_cost(path, distance_fn)
+                print('{}) Length: {} | Cost: {:.3f} | Ratio: {:.3f}'.format(i, len(path), cost, cost/min_distance))
                 #path = path[:1] + path[-2:]
                 path = waypoints_from_path(path)
                 add_path(viewer, path, color='green')
                 #curve = interpolate_path(path) # , collision_fn=collision_fn)
-                curve = retime_path(path, collision_fn=collision_fn, smooth=True)
+                curve = retime_path(path, collision_fn=collision_fn, smooth=args.smooth) # , smooth=True)
                 times, path = time_discretize_curve(curve)
                 times = [np.linalg.norm(curve(t, nu=1), ord=INF) for t in times]
                 #add_points(viewer, [curve(t) for t in curve.x])
@@ -228,7 +268,7 @@ def main():
                     smoothed = smooth_path(path, extend_fn, collision_fn, max_iterations=INF, max_time=args.time)
                     print('Smoothed distance_fn: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
                     add_path(viewer, smoothed, color='red')
-            user_input('Finish?')
+    user_input('Finish?')
 
 if __name__ == '__main__':
     main()

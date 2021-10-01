@@ -202,6 +202,12 @@ def waypoints_from_path(path, tolerance=1e-3):
     waypoints.append(last_conf)
     return waypoints
 
+
+def refine_waypoints(waypoints, extend_fn):
+    #if len(waypoints) <= 1:
+    #    return waypoints
+    return list(flatten(extend_fn(q1, q2) for q1, q2 in get_pairs(waypoints))) # [waypoints[0]] +
+
 ##################################################
 
 def convex_combination(x, y, w=0.5):
@@ -214,24 +220,31 @@ def uniform_generator(d):
 
 
 def halton_generator(d, seed=None):
+    # TODO: apply random noise on top
+    # https://ghalton.readthedocs.io/en/latest/
     import ghalton
     if seed is None:
-        seed = random.randint(0, 1000)
+        seed = random.randint(0, 100-1) # ghalton.EA_PERMS[d-1]
+    #ghalton.PRIMES, ghalton.EA_PERMS
     #sequencer = ghalton.Halton(d)
-    sequencer = ghalton.GeneralizedHalton(d, seed)
+    #sequencer = ghalton.GeneralizedHalton(d, seed) # TODO: seed not working
+    sequencer = ghalton.GeneralizedHalton(ghalton.EA_PERMS[:d])
     #sequencer.reset()
+    #sequencer.seed(seed) # TODO: seed not working
+    sequencer.get(seed) # Burn this number of values
     while True:
         [weights] = sequencer.get(1)
         yield np.array(weights)
 
-def unit_generator(d, use_halton=False):
+def unit_generator(d, use_halton=False, **kwargs):
+    # TODO: mixture generator
     if use_halton:
         try:
             import ghalton
         except ImportError:
             print('ghalton is not installed (https://pypi.org/project/ghalton/)')
             use_halton = False
-    return halton_generator(d) if use_halton else uniform_generator(d)
+    return halton_generator(d, **kwargs) if use_halton else uniform_generator(d)
 
 
 def interval_generator(lower, upper, **kwargs):

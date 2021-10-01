@@ -1,6 +1,7 @@
 from random import randint, random
+
 from .utils import INF, elapsed_time, irange, waypoints_from_path, get_pairs, get_distance, \
-    convex_combination, flatten, compute_path_cost, default_selector
+    convex_combination, compute_path_cost, default_selector, refine_waypoints
 
 import time
 import numpy as np
@@ -39,11 +40,6 @@ def smooth_path_old(path, extend_fn, collision_fn, max_iterations=50, max_time=I
     return smoothed_path
 
 ##################################################
-
-def refine_waypoints(waypoints, extend_fn):
-    #if len(waypoints) <= 1:
-    #    return waypoints
-    return list(flatten(extend_fn(q1, q2) for q1, q2 in get_pairs(waypoints))) # [waypoints[0]] +
 
 def smooth_path(path, extend_fn, collision_fn, distance_fn=None, max_iterations=50, max_time=INF, verbose=False):
     """

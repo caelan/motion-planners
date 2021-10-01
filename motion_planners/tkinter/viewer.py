@@ -50,7 +50,7 @@ class PRMViewer(object):
         (point1, point2) = box
         (x1, y1) = self.pixel_from_point(point1)
         (x2, y2) = self.pixel_from_point(point2)
-        self.canvas.create_rectangle(x1, y1, x2, y2, fill=color, width=width)
+        self.canvas.create_rectangle(x1, y1, x2, y2, outline='black', fill=color, width=width)
 
     def draw_circle(self, center, radius, width=2, color='black'):
         (x1, y1) = self.pixel_from_point(np.array(center) - radius * np.ones(2))
