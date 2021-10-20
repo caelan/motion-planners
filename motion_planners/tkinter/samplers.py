@@ -37,8 +37,6 @@ def get_connected_test(obstacles, max_distance=0.25): # 0.25 | 0.2 | 0.25 | 0.5 
     roadmap = []
 
     def connected_test(q1, q2):
-        #n = len(samples)
-        #threshold = gamma * (math.log(n) / n) ** (1. / d)
         threshold = max_distance
         are_connected = (get_distance(q1, q2) <= threshold) and is_collision_free((q1, q2), obstacles)
         if are_connected:

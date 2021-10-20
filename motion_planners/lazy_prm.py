@@ -21,6 +21,7 @@ def retrace_path(visited, vertex):
 def dijkstra(start_v, neighbors_fn, cost_fn=unit_cost_fn):
     # Update the heuristic over time
     # TODO: overlap with discrete
+    # TODO: all pairs shortest paths
     start_g = 0
     visited = {start_v: Node(start_g, None)}
     queue = [(start_g, start_v)]
@@ -111,13 +112,16 @@ def compute_graph(samples, weights=None, p_norm=2, max_degree=6, max_distance=IN
     # https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html
     # TODO: approximate KDTrees
+    # https://github.com/lmcinnes/pynndescent
+    # https://github.com/spotify/annoy
+    # https://github.com/flann-lib/flann
     kd_tree = KDTree(embedded)
     for v1 in vertices:
         # TODO: could dynamically compute distances
         distances, neighbors = kd_tree.query(embedded[v1], k=max_degree, eps=approximate_eps,
                                              p=p_norm, distance_upper_bound=max_distance)
         for d, v2 in zip(distances, neighbors):
-            if (d < max_distance) and (v1 != v2):
+            if (d <= max_distance) and (v1 != v2):
                 edges.update([(v1, v2), (v2, v1)])
     # print(time.time() - start_time, len(edges), float(len(edges))/len(samples))
     return vertices, edges
@@ -155,11 +159,13 @@ def sample_roadmap(start, goal, sample_fn, distance_fn, num_samples=100,
         conf = sample_fn() # TODO: include
         # TODO: bound function based on distance_fn(start, conf) and individual distances
         if (max_cost == INF) or (distance_fn(start, conf) + distance_fn(conf, goal)) < max_cost:
+            # TODO: only keep edges that move toward the goal
             samples.append(conf)
     vertices, edges = compute_graph(samples, p_norm=p_norm, **kwargs)
     return samples, vertices, edges
 
 def calculate_radius(d=2):
+    # TODO: unify with get_threshold_fn
     # Sampling-based Algorithms for Optimal Motion Planning
     # http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.419.5503&rep=rep1&type=pdf
     # https://en.wikipedia.org/wiki/Volume_of_an_n-ball
@@ -168,6 +174,7 @@ def calculate_radius(d=2):
     radius = 1./2
     vol_ball = np.pi * (radius ** d)
     gamma = 2 * ((1 + 1. / d) * (vol_free / vol_ball)) ** (1. / d)
+    # threshold = gamma * (math.log(n) / n) ** (1. / d)
     return gamma
 
 ##################################################
@@ -242,18 +249,19 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, num_samples=100,
 
 ##################################################
 
-def replan_loop(start_conf, end_conf, sample_fn, extend_fn, collision_fn, params_list, smooth=0, **kwargs):
+def replan_loop(start_conf, end_conf, sample_fn, extend_fn, collision_fn, params_list, smooth=0, max_time=INF, **kwargs):
     # TODO: currently unused
     # TODO: iteratively increase the parameters
+    start_time = time.time()
     if collision_fn(start_conf) or collision_fn(end_conf):
         return None
     from .meta import direct_path
     path = direct_path(start_conf, end_conf, extend_fn, collision_fn)
     if path is not None:
         return path
-    for num_samples in params_list:
+    for num_samples in params_list: # TODO: generalize to degree, distance, cost,
         path = lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn,
-                        num_samples=num_samples, **kwargs)
+                        num_samples=num_samples, max_time=max_time-elapsed_time(start_time), **kwargs)
         if path is not None:
             return smooth_path(path, extend_fn, collision_fn, max_iterations=smooth)
     return None
