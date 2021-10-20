@@ -1,3 +1,4 @@
+import random
 import time
 
 from .primitives import extend_towards
@@ -15,6 +16,15 @@ def wrap_collision_fn(collision_fn):
         except TypeError:
             return collision_fn(q2)
     return fn
+
+def alternating_swap(nodes1, nodes2):
+    swap = len(nodes1) > len(nodes2)  # TODO: other swap conditions
+    return swap
+
+def random_swap(nodes1, nodes2):
+    p = float(len(nodes1)) / (len(nodes1) + len(nodes2))
+    swap = (random.random() < p)
+    return swap
 
 def rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                 max_iterations=RRT_ITERATIONS, max_time=INF, **kwargs):
@@ -40,7 +50,8 @@ def rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
     for iteration in irange(max_iterations):
         if elapsed_time(start_time) >= max_time:
             break
-        swap = len(nodes1) > len(nodes2)
+        #swap = alternating_swap(nodes1, nodes2)
+        swap = random_swap(nodes1, nodes2)
         tree1, tree2 = nodes1, nodes2
         if swap:
             tree1, tree2 = nodes2, nodes1

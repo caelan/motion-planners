@@ -253,7 +253,7 @@ class MultiPPoly(object):
     def start_x(self):
         return spline_start(self)
     @property
-    def end_(self):
+    def end_x(self):
         return spline_end(self)
     def __call__(self, *args, **kwargs):
         return np.array([poly(*args, **kwargs) for poly in self.polys])
@@ -304,3 +304,50 @@ class MultiPPoly(object):
         return CubicHermiteSpline(times, positions, dydx=velocities, **kwargs)
     def __str__(self):
         return '{}({})'.format(self.__class__.__name__, self.polys)
+
+##################################################
+
+class Curve(object):
+    def __init__(self, poly):
+        # TODO: adjust start time
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PPoly.html#scipy.interpolate.PPoly
+        self.poly = poly
+    @property
+    def degree(self):
+        k, m, d = self.poly.c.shape
+        return k
+    @property
+    def num_intervals(self):
+        k, m, d = self.poly.c.shape
+        return m
+    @property
+    def dim(self):
+        k, m, d = self.poly.c.shape
+        return d
+    @property
+    def start_t(self):
+        return spline_start(self.poly)
+    @property
+    def end_t(self):
+        return spline_end(self.poly)
+    @property
+    def duration(self):
+        return self.end_t - self.start_t
+    @property
+    def breakpoints(self):
+        return self.poly.x
+    def __call__(self, *args, **kwargs):
+        return self.poly(*args, **kwargs)
+    def derivative(self, *args, **kwargs):
+        return Curve(self.poly.derivative(*args, **kwargs))
+    def antiderivative(self, *args, **kwargs):
+        return Curve(self.poly.antiderivative(*args, **kwargs))
+    def roots(self, *args, **kwargs):
+        return self.poly.roots(*args, **kwargs)
+    def sample_times(self, dt):
+        return np.append(np.arange(self.start_t, self.end_t, step=dt), [self.end_t])
+    def sample(self, *args, **kwargs):
+        for t in self.sample_times(*args, **kwargs):
+            yield self(t)
+    def __str__(self):
+        return '{}(d={}, t=[{:.2f},{:.2f}])'.format(self.__class__.__name__, self.dim, self.start_t, self.end_t)

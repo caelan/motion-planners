@@ -94,7 +94,7 @@ def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorith
     # TODO: return lambda function
     start_time = time.time()
     path = check_direct(start, goal, extend_fn, collision_fn)
-    if path is not None:
+    if (path is not None) or (algorithm == 'direct'):
         return path
     #max_time -= elapsed_time(start_time)
     if algorithm == 'prm':

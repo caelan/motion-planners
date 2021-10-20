@@ -220,6 +220,7 @@ def uniform_generator(d):
 
 
 def halton_generator(d, seed=None):
+    # TODO: randomly sample an initial point and then wrap around
     # TODO: apply random noise on top
     # https://ghalton.readthedocs.io/en/latest/
     import ghalton
@@ -235,6 +236,7 @@ def halton_generator(d, seed=None):
     while True:
         [weights] = sequencer.get(1)
         yield np.array(weights)
+
 
 def unit_generator(d, use_halton=False, **kwargs):
     # TODO: mixture generator

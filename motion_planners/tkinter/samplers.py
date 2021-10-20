@@ -13,11 +13,21 @@ def get_distance_fn(weights):
     return fn
 
 
-def get_sample_fn(region, obstacles=[], **kwargs): #, check_collisions=False):
+def wrap_sample_fn(sample_fn):
+    samples = []
+
+    def new_sample_fn(*args, **kwargs):
+        q = sample_fn(*args, **kwargs)
+        samples.append(q)
+        return q
+
+    return new_sample_fn, samples
+
+
+def get_sample_fn(region, obstacles=[], only_cfree=True, **kwargs): #, check_collisions=False):
     # TODO: additional rejection function
     # TODO: Gaussian sampling for narrow passages
-    samples = []
-    collision_fn, _ = get_collision_fn(region, obstacles)
+    collision_fn = get_collision_fn(region, obstacles)
     lower, upper = region
     generator = interval_generator(lower, upper, **kwargs)
 
@@ -25,12 +35,11 @@ def get_sample_fn(region, obstacles=[], **kwargs): #, check_collisions=False):
         #area = np.product(upper - lower) # TODO: sample_fn proportional to area
         for q in generator:
             #q = sample_box(region)
-            if collision_fn(q):
+            if only_cfree and collision_fn(q):
                 continue
-            samples.append(q)
             return q # TODO: sampling with state (e.g. deterministic sampling)
 
-    return region_gen, samples
+    return region_gen
 
 
 def get_connected_test(obstacles, max_distance=0.25): # 0.25 | 0.2 | 0.25 | 0.5 | 1.0
@@ -54,10 +63,24 @@ def get_threshold_fn(d=2):
     return threshold_fn
 
 
-def get_collision_fn(environment, obstacles):
+def wrap_collision_fn(collision_fn):
+    colliding = []
     cfree = []
     # TODO: KDTree for hyperspheres
     # TODO: Signed Distance Function (SDF)
+
+    def new_collision_fn(q, *args, **kwargs):
+        result = collision_fn(q, *args, **kwargs)
+        if result:
+            colliding.append(q)
+        else:
+            cfree.append(q)
+        return result
+
+    return new_collision_fn, colliding, cfree
+
+
+def get_collision_fn(environment, obstacles):
 
     def collision_fn(q):
         #time.sleep(1e-3)
@@ -65,14 +88,22 @@ def get_collision_fn(environment, obstacles):
             return True
         if point_collides(q, obstacles):
             return True
-        cfree.append(q)
         return False
 
-    return collision_fn, cfree
+    return collision_fn
+
+
+def wrap_extend_fn(extend_fn):
+    roadmap = []
+
+    def new_extend_fn(q1, q2, *args, **kwargs):
+        raise NotImplementedError()
+
+    return new_extend_fn, roadmap
 
 
 def get_extend_fn(environment, obstacles=[]):
-    collision_fn, _ = get_collision_fn(environment, obstacles)
+    collision_fn = get_collision_fn(environment, obstacles)
     roadmap = []
 
     def extend_fn(q1, q2):

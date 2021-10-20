@@ -13,6 +13,8 @@ Node = namedtuple('Node', ['g', 'parent'])
 unit_cost_fn = lambda v1, v2: 1.
 zero_heuristic_fn = lambda v: 0
 
+ORDINAL = 1e3
+
 def retrace_path(visited, vertex):
     if vertex is None:
         return []
@@ -36,11 +38,22 @@ def dijkstra(start_v, neighbors_fn, cost_fn=unit_cost_fn):
                 heappush(queue, (next_g, next_v))
     return visited
 
+def get_priority_fn(w=1.):
+    assert 0. <= w <= INF
+    def priority_fn(g, h):
+        if w == 0.:
+            return g
+        if w == INF:
+            return (h, g)
+        return g + w*h
+    return priority_fn
+
 def wastar_search(start_v, end_v, neighbors_fn, cost_fn=unit_cost_fn,
-                  heuristic_fn=zero_heuristic_fn, w=1., max_cost=INF, max_time=INF):
+                  heuristic_fn=zero_heuristic_fn, max_cost=INF, max_time=INF, **kwargs):
     # TODO: lazy wastar to get different paths
+    # TODO: multi-start / multi-goal
     #heuristic_fn = lambda v: cost_fn(v, end_v)
-    priority_fn = lambda g, h: g + w*h
+    priority_fn = get_priority_fn(**kwargs)
     goal_test = lambda v: v == end_v
 
     start_time = time.time()
@@ -60,7 +73,8 @@ def wastar_search(start_v, end_v, neighbors_fn, cost_fn=unit_cost_fn,
                 visited[next_v] = Node(next_g, current_v)
                 next_h = heuristic_fn(next_v)
                 if priority_fn(next_g, next_h) < max_cost:
-                    heappush(queue, (priority_fn(next_g, next_h), next_g, next_v))
+                    next_p = priority_fn(next_g, next_h)
+                    heappush(queue, (next_p, next_g, next_v))
     return None
 
 ##################################################
@@ -179,8 +193,8 @@ def calculate_radius(d=2):
 
 ##################################################
 
-def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, num_samples=100,
-             weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, **kwargs): #, max_paths=INF):
+def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_samples=100,
+             weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, w=0., **kwargs): #, max_paths=INF):
     """
     :param start: Start configuration - conf
     :param goal: End configuration - conf
@@ -224,18 +238,27 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, num_samples=100,
         for vertex1, vertex2 in edges:
             check_edge(vertex1, vertex2, samples, colliding_edges, collision_fn, extend_fn)
 
-    cost_fn = lambda v1, v2: distance_fn(samples[v1], samples[v2])
+    if cost_fn is None:
+        cost_fn = distance_fn # TODO: additive cost, acceleration cost
+    weight_fn = lambda v1, v2: cost_fn(samples[v1], samples[v2])
+    #lazy_fn = lambda v1, v2: (v2 not in colliding_vertices)
+    lazy_fn = lambda v1, v2: ((v1, v2) not in colliding_edges) # TODO: score by length
+    #weight_fn = lazy_fn
+    #weight_fn = lambda v1, v2: (lazy_fn(v1, v2), cost_fn(samples[v1], samples[v2])) # TODO:
+    #weight_fn = lambda v1, v2: ORDINAL*lazy_fn(v1, v2) + cost_fn(samples[v1], samples[v2])
+    #w = 0
+
     visited = dijkstra(end_index, neighbors_fn, cost_fn)
     heuristic_fn = lambda v: visited[v].g if v in visited else INF
     path = None
     while (elapsed_time(start_time) < max_time) and (path is None): # TODO: max_attempts
         # TODO: extra cost to prioritize reusing checked edges
         lazy_path = wastar_search(start_index, end_index, neighbors_fn=neighbors_fn,
-                                  cost_fn=cost_fn, heuristic_fn=heuristic_fn,
-                                  max_cost=max_cost, max_time=max_time-elapsed_time(start_time))
+                                  cost_fn=weight_fn, heuristic_fn=heuristic_fn,
+                                  max_cost=max_cost, max_time=max_time-elapsed_time(start_time), w=w)
         if lazy_path is None:
             break
-        cost = sum(cost_fn(v1, v2) for v1, v2 in get_pairs(lazy_path))
+        cost = sum(weight_fn(v1, v2) for v1, v2 in get_pairs(lazy_path))
         print('Length: {} | Cost: {:.3f} | Vertices: {} | Edges: {} | Degree: {:.3f} | Time: {:.3f}'.format(
             len(lazy_path), cost, len(colliding_vertices), len(colliding_edges), degree, elapsed_time(start_time)))
         if check_path(lazy_path, colliding_vertices, colliding_edges, samples, extend_fn, collision_fn):

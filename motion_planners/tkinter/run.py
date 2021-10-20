@@ -8,7 +8,7 @@ import random
 from ..meta import solve
 from ..trajectory.linear import solve_multi_linear
 from ..trajectory.discretize import time_discretize_curve, V_MAX, A_MAX
-from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn
+from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn, wrap_collision_fn, wrap_sample_fn
 from ..trajectory.smooth import smooth_curve, get_curve_collision_fn
 from ..trajectory.limits import analyze_continuity
 from .viewer import create_box, draw_environment, add_points, \
@@ -219,8 +219,8 @@ def main():
         # TODO: cost bound & best cost
         for _ in range(args.restarts+1):
             start_time = time.time()
-            collision_fn, cfree = get_collision_fn(environment, obstacles)
-            sample_fn, samples = get_sample_fn(environment, obstacles=[], use_halton=True) # obstacles
+            collision_fn, colliding, cfree = wrap_collision_fn(get_collision_fn(environment, obstacles))
+            sample_fn, samples = wrap_sample_fn(get_sample_fn(environment, obstacles=[], use_halton=True)) # obstacles
             extend_fn, roadmap = get_extend_fn(environment, obstacles=obstacles)  # obstacles | []
 
             path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
@@ -242,12 +242,13 @@ def main():
 
             if args.draw:
                 # roadmap = samples = cfree = []
-                add_roadmap(viewer, roadmap, color='black')
-                add_points(viewer, samples, color='red', radius=2)
-                #add_points(viewer, cfree, color='blue', radius=2)
+                add_roadmap(viewer, roadmap, color='black') # TODO: edges going backward?
+                add_points(viewer, samples, color='green', radius=2)
+                add_points(viewer, colliding, color='red', radius=2)
+                add_points(viewer, cfree, color='blue', radius=2)
 
-            print('Solutions ({}): {} | Time: {:.3f}'.format(len(paths), [(len(path), round(compute_path_cost(
-                path, distance_fn), 3)) for path in paths], elapsed_time(start_time)))
+            print('Solutions ({}): {} | Colliding: {} | CFree: {} | Time: {:.3f}'.format(len(paths), [(len(path), round(compute_path_cost(
+                path, distance_fn), 3)) for path in paths], len(colliding), len(cfree), elapsed_time(start_time)))
             for i, path in enumerate(paths):
                 cost = compute_path_cost(path, distance_fn)
                 print('{}) Length: {} | Cost: {:.3f} | Ratio: {:.3f}'.format(i, len(path), cost, cost/min_distance))
