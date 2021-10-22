@@ -243,9 +243,9 @@ def main():
             if args.draw:
                 # roadmap = samples = cfree = []
                 add_roadmap(viewer, roadmap, color='black') # TODO: edges going backward?
-                add_points(viewer, samples, color='green', radius=2)
+                add_points(viewer, samples, color='grey', radius=2)
                 add_points(viewer, colliding, color='red', radius=2)
-                add_points(viewer, cfree, color='blue', radius=2)
+                add_points(viewer, cfree, color='blue', radius=2) # green
 
             print('Solutions ({}): {} | Colliding: {} | CFree: {} | Time: {:.3f}'.format(len(paths), [(len(path), round(compute_path_cost(
                 path, distance_fn), 3)) for path in paths], len(colliding), len(cfree), elapsed_time(start_time)))

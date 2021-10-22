@@ -1,9 +1,9 @@
-from scipy.spatial.kdtree import KDTree
 from heapq import heappush, heappop
 from collections import namedtuple, defaultdict
 
+from .nearest import NearestNeighbors
 from .utils import INF, elapsed_time, get_pairs, default_selector, refine_waypoints, irange, \
-    merge_dicts, compute_path_cost, get_length, is_path, outgoing_from_edges
+    merge_dicts, compute_path_cost, get_length, is_path
 
 import time
 import numpy as np
@@ -88,32 +88,6 @@ def get_distance_fn(weights, p_norm=2):
 
 ##################################################
 
-def check_vertex(roadmap, v, samples, collision_fn):
-    colliding_vertices = roadmap.colliding_vertices
-    if v not in colliding_vertices:
-        # TODO: could update the colliding adjacent edges as well
-        colliding_vertices[v] = collision_fn(samples[v])
-    return not colliding_vertices[v]
-
-def check_edge(roadmap, v1, v2, samples, collision_fn, extend_fn):
-    colliding_edges = roadmap.colliding_edges
-    if (v1, v2) not in colliding_edges:
-        segment = default_selector(extend_fn(samples[v1], samples[v2]))
-        colliding_edges[v1, v2] = any(map(collision_fn, segment))
-        colliding_edges[v2, v1] = colliding_edges[v1, v2]
-    return not colliding_edges[v1, v2]
-
-def check_path(roadmap, path, samples, extend_fn, collision_fn):
-    for v in default_selector(path):
-        if not check_vertex(roadmap, v, samples, collision_fn):
-            return False
-    for v1, v2 in default_selector(get_pairs(path)):
-        if not check_edge(roadmap, v1, v2, samples, collision_fn, extend_fn):
-            return False
-    return True
-
-##################################################
-
 class Roadmap(object):
     def __init__(self, weights, samples=[], p_norm=2, max_degree=6, max_distance=INF, approximate_eps=0., **kwargs):
         self.weights = tuple(weights)
@@ -152,46 +126,34 @@ class Roadmap(object):
         for v2 in self.outgoing_from_edges[v1]:
             if not self.colliding_vertices.get(v2, False) and not self.colliding_edges.get((v1, v2), False):
                 yield v2
+    def check_vertex(self, v, collision_fn):
+        x = self.samples[v]
+        colliding_vertices = self.colliding_vertices
+        if v not in colliding_vertices:
+            # TODO: could update the colliding adjacent edges as well
+            colliding_vertices[v] = collision_fn(x)
+        return not colliding_vertices[v]
+    def check_edge(self, v1, v2, collision_fn, extend_fn):
+        colliding_edges = self.colliding_edges
+        if (v1, v2) not in colliding_edges:
+            x1 = self.samples[v1]
+            x2 = self.samples[v2]
+            segment = default_selector(extend_fn(x1, x2))
+            colliding_edges[v1, v2] = any(map(collision_fn, segment))
+            colliding_edges[v2, v1] = colliding_edges[v1, v2]
+        return not colliding_edges[v1, v2]
+    def check_path(self, path, extend_fn, collision_fn):
+        for v in default_selector(path):
+            if not self.check_vertex(v, collision_fn):
+                return False
+        for v1, v2 in default_selector(get_pairs(path)):
+            if not self.check_edge(v1, v2, collision_fn, extend_fn):
+                return False
+        return True
 
 ##################################################
 
-class NearestNeighbors(object):
-    # https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html
-    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html
-    # TODO: approximate KDTrees
-    # https://github.com/lmcinnes/pynndescent
-    # https://github.com/spotify/annoy
-    # https://github.com/flann-lib/flann
-    def __init__(self, data=[], embed_fn=lambda x: x, **kwargs):
-        # TODO: maintain tree and brute-force list
-        self.data = [] # TODO: self.kd_tree.data
-        self.kd_tree = None
-        self.embed_fn = embed_fn
-        self.kwargs = kwargs
-        self.add_data(data)
-    def add_data(self, data):
-        indices = []
-        for x in data:
-            indices.append(len(self.data))
-            self.data.append(x)
-        if not self.data:
-            return zip(indices, data)
-        embedded_data = list(map(self.embed_fn, self.data))
-        self.kd_tree = KDTree(embedded_data,
-                              #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None
-                              **self.kwargs,
-                              )
-        return zip(indices, data)
-    def query_neighbors(self, x, **kwargs):
-        # TODO: class **kwargs
-        embedded = self.embed_fn(x)
-        # k=1, eps=0, p=2, distance_upper_bound=inf, workers=1
-        distances, indices = self.kd_tree.query(embedded, **kwargs)
-        return [(d, i, self.data[i]) for d, i in zip(distances, indices)]
-
-##################################################
-
-def sample_roadmap(start, goal, sample_fn, distance_fn, num_samples=100,
+def sample_roadmap(start, goal, sample_fn, distance_fn=None, num_samples=100,
                    weights=None, max_cost=INF, max_time=INF, **kwargs):
     start_time = time.time()
     samples = [start, goal]
@@ -256,13 +218,12 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
 
     # TODO: update collision occupancy based on proximity to existing colliding (for diversity as well)
     # TODO: minimize the maximum distance to colliding
-    neighbors_fn = roadmap.neighbors_fn
 
     if not lazy:
         for vertex in vertices:
-            check_vertex(roadmap, vertex, samples, collision_fn)
+            roadmap.check_vertex(vertex, collision_fn)
         for vertex1, vertex2 in edges:
-            check_edge(roadmap, vertex1, vertex2, samples, collision_fn, extend_fn)
+            roadmap.check_edge(vertex1, vertex2, collision_fn, extend_fn)
 
     if cost_fn is None:
         cost_fn = distance_fn # TODO: additive cost, acceleration cost
@@ -281,14 +242,14 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
     #weight_fn = lambda v1, v2: ORDINAL*lazy_fn(v1, v2) + cost_fn(samples[v1], samples[v2])
     #w = 0
 
-    visited = dijkstra(end_index, neighbors_fn, weight_fn)
+    visited = dijkstra(end_index, roadmap.neighbors_fn, weight_fn)
     heuristic_fn = lambda v: visited[v].g if (v in visited) else INF
     #heuristic_fn = zero_heuristic_fn
     #heuristic_fn = lambda v: weight_fn(v, end_index)
     path = None
     while (elapsed_time(start_time) < max_time) and (path is None): # TODO: max_attempts
         # TODO: extra cost to prioritize reusing checked edges
-        lazy_path = wastar_search(start_index, end_index, neighbors_fn=neighbors_fn,
+        lazy_path = wastar_search(start_index, end_index, neighbors_fn=roadmap.neighbors_fn,
                                   cost_fn=weight_fn, heuristic_fn=heuristic_fn,
                                   max_cost=max_cost, max_time=max_time-elapsed_time(start_time), w=w)
         if lazy_path is None:
@@ -298,7 +259,7 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
             print('Length: {} | Cost: {:.3f} | Vertices: {} | Edges: {} | Degree: {:.3f} | Time: {:.3f}'.format(
                 len(lazy_path), cost, len(roadmap.colliding_vertices), len(roadmap.colliding_edges),
                 degree, elapsed_time(start_time)))
-        if check_path(roadmap, lazy_path, samples, extend_fn, collision_fn):
+        if roadmap.check_path(lazy_path, extend_fn, collision_fn):
             path = lazy_path
 
     if path is None:
