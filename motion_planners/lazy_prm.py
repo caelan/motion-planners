@@ -150,24 +150,30 @@ class Roadmap(object):
             if not self.check_edge(v1, v2, collision_fn, extend_fn):
                 return False
         return True
+    def sample(self, sample_fn, num_samples, max_time=INF):
+        # TODO: compute number of rejected samples
+        start_time = time.time()
+        samples = []
+        while (len(samples) < num_samples) and (elapsed_time(start_time) < max_time):
+            conf = sample_fn()  # TODO: include
+            # TODO: bound function based on distance_fn(start, conf) and individual distances
+            # if (max_cost == INF) or (distance_fn(start, conf) + distance_fn(conf, goal)) < max_cost:
+            # TODO: only keep edges that move toward the goal
+            samples.append(conf)
+        return self.add_samples(samples)
 
 ##################################################
 
-def sample_roadmap(start, goal, sample_fn, distance_fn=None, num_samples=100,
-                   weights=None, max_cost=INF, max_time=INF, **kwargs):
-    start_time = time.time()
-    samples = [start, goal]
-    # TODO: compute number of rejected samples
-    while (len(samples) < num_samples) and (elapsed_time(start_time) < max_time):
-        conf = sample_fn() # TODO: include
-        # TODO: bound function based on distance_fn(start, conf) and individual distances
-        #if (max_cost == INF) or (distance_fn(start, conf) + distance_fn(conf, goal)) < max_cost:
-        # TODO: only keep edges that move toward the goal
-        samples.append(conf)
+def sample_roadmap(start, goal, sample_fn, num_samples=100,
+                   weights=None, **kwargs): # max_cost=INF
     if weights is None:
-        weights = np.ones(len(samples[0]))
-    return Roadmap(weights, samples=samples, leafsize=10, compact_nodes=True,
-                   copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
+        d = len(start)
+        weights = np.ones(d)
+    samples = [start, goal]
+    roadmap = Roadmap(weights, samples=samples, leafsize=10, compact_nodes=True,
+                      copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
+    roadmap.sample(sample_fn, num_samples=num_samples)
+    return roadmap
 
 def calculate_radius(d=2):
     # TODO: unify with get_threshold_fn
@@ -184,7 +190,7 @@ def calculate_radius(d=2):
 
 ##################################################
 
-def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_samples=100,
+def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, roadmap=None, num_samples=100,
              weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, w=1., verbose=True, **kwargs): #, max_paths=INF):
     """
     :param start: Start configuration - conf
@@ -203,14 +209,12 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
     # TODO: multi-query motion planning
     start_time = time.time()
     # TODO: can embed pose and/or points on the robot for other distances
-    d = len(start)
+    if roadmap is None:
+        roadmap = sample_roadmap(start, goal, sample_fn, num_samples=num_samples, p_norm=p_norm, **kwargs) # max_cost=max_cost,
     if weights is None:
+        d = len(start)
         weights = np.ones(d)
-    distance_fn = get_distance_fn(weights, p_norm=p_norm)
-    # TODO: can compute cost between waypoints from extend_fn
 
-    roadmap = sample_roadmap(start, goal, sample_fn, distance_fn, num_samples=num_samples,
-                             p_norm=p_norm, max_cost=INF, **kwargs) # max_cost=max_cost,
     samples, vertices, edges = roadmap
     neighbors_from_index = roadmap.outgoing_from_edges
     start_index, end_index = 0, 1
@@ -225,6 +229,8 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
         for vertex1, vertex2 in edges:
             roadmap.check_edge(vertex1, vertex2, collision_fn, extend_fn)
 
+    # TODO: can compute cost between waypoints from extend_fn
+    distance_fn = get_distance_fn(weights, p_norm=p_norm)
     if cost_fn is None:
         cost_fn = distance_fn # TODO: additive cost, acceleration cost
 
@@ -288,8 +294,13 @@ def lazy_prm_star(start, conf, sample_fn, extend_fn, collision_fn, cost_fn=None,
             weights = np.ones(d)
         distance_fn = get_distance_fn(weights, p_norm=p_norm)
         cost_fn = distance_fn # TODO: additive cost, acceleration cost
+
     if param_sequence is None:
         param_sequence = create_param_sequence()
+    roadmap = None
+    #if roadmap is None:
+    #    roadmap = sample_roadmap(start, goal, sample_fn, num_samples=num_samples, p_norm=p_norm, **kwargs) # max_cost=max_cost,
+
     best_path = None
     best_cost = max_cost
     for i, params in enumerate(param_sequence):
@@ -299,10 +310,10 @@ def lazy_prm_star(start, conf, sample_fn, extend_fn, collision_fn, cost_fn=None,
         if verbose:
             print('\nIteration: {} | Cost: {:.3f} | Elapsed: {:.3f} | Remaining: {:.3f} | Params: {}'.format(
                 i, best_cost, elapsed_time(start_time), remaining_time, params))
-        new_path = lazy_prm(start, conf, sample_fn, extend_fn, collision_fn,
-                                cost_fn=cost_fn, weights=weights, p_norm=p_norm,
-                                max_time=remaining_time, max_cost=best_cost,
-                                verbose=verbose, **params, **kwargs)[0]
+        new_path = lazy_prm(start, conf, sample_fn, extend_fn, collision_fn, roadmap=roadmap,
+                            cost_fn=cost_fn, weights=weights, p_norm=p_norm,
+                            max_time=remaining_time, max_cost=best_cost,
+                            verbose=verbose, **params, **kwargs)[0]
         new_cost = compute_path_cost(new_path, cost_fn=cost_fn)
         if verbose:
             print(is_path(new_path), new_cost, get_length(new_path))
