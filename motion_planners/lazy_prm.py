@@ -15,7 +15,7 @@ zero_heuristic_fn = lambda v: 0
 
 ORDINAL = 1e3
 
-LAST_ROADMAP = None
+ROADMAPS = [] # TODO: not ideal
 
 def retrace_path(visited, vertex):
     if vertex is None:
@@ -91,8 +91,9 @@ def get_distance_fn(weights, p_norm=2):
 ##################################################
 
 class Roadmap(object):
-    def __init__(self, weights, samples=[], p_norm=2, max_degree=5, max_distance=INF, approximate_eps=0., **kwargs):
+    def __init__(self, weights, cost_fn, samples=[], p_norm=2, max_degree=5, max_distance=INF, approximate_eps=0., **kwargs):
         self.weights = tuple(weights)
+        self.cost_fn = cost_fn
         self.p_norm = p_norm
         self.max_degree = max_degree
         self.max_distance = max_distance
@@ -100,6 +101,7 @@ class Roadmap(object):
         self.nearest = NearestNeighbors(embed_fn=get_embed_fn(self.weights), **kwargs)
         self.edges = set()
         self.outgoing_from_edges = defaultdict(set)
+        self.edge_costs = {}
         self.colliding_vertices = {}
         self.colliding_edges = {}
         self.add_samples(samples)
@@ -161,6 +163,11 @@ class Roadmap(object):
             if not self.check_edge(v1, v2, collision_fn, extend_fn):
                 return False
         return True
+    def get_cost(self, v1, v2):
+        edge = (v1, v2)
+        if edge not in self.edge_costs:
+            self.edge_costs[v1, v2] = self.edge_costs[v2, v1] = self.cost_fn(self.samples[v1], self.samples[v2])
+        return self.edge_costs[edge]
     def sample(self, sample_fn, num_samples, max_time=INF):
         # TODO: compute number of rejected samples
         start_time = time.time()
@@ -172,30 +179,21 @@ class Roadmap(object):
             # TODO: only keep edges that move toward the goal
             samples.append(conf)
         return self.add_samples(samples)
+    def augment(self, sample_fn, num_samples=100):
+        n = len(self.samples)
+        if n >= num_samples:
+            return self
+        self.sample(sample_fn, num_samples=num_samples - n)
+        return self
 
 ##################################################
 
-def default_weights(conf, weights=None):
+def default_weights(conf, weights=None, scale=1.):
     if weights is not None:
         return weights
     d = len(conf)
-    weights = np.ones(d)
+    weights = scale*np.ones(d)
     return weights
-
-def augment_roadmap(roadmap, sample_fn, num_samples=100):
-    n = len(roadmap.samples)
-    if n >= num_samples:
-        return roadmap
-    roadmap.sample(sample_fn, num_samples=num_samples - n)
-    return roadmap
-
-def sample_roadmap(sample_fn, samples=[], num_samples=100,
-                   weights=None, **kwargs): # max_cost=INF
-    assert samples
-    weights = default_weights(samples[0], weights=weights)
-    roadmap = Roadmap(weights, samples=samples, leafsize=10, compact_nodes=True,
-                      copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
-    return augment_roadmap(roadmap, sample_fn, num_samples=num_samples)
 
 def calculate_radius(d=2):
     # TODO: unify with get_threshold_fn
@@ -232,10 +230,15 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, road
     start_time = time.time()
     # TODO: can embed pose and/or points on the robot for other distances
     weights = default_weights(start, weights=weights)
+    # TODO: can compute cost between waypoints from extend_fn
+    distance_fn = get_distance_fn(weights, p_norm=p_norm)
+    if cost_fn is None:
+        cost_fn = distance_fn # TODO: additive cost, acceleration cost
+
     if roadmap is None:
-        roadmap = Roadmap(weights, samples=[start, goal], leafsize=10, compact_nodes=True,
+        roadmap = Roadmap(weights, cost_fn, samples=[start, goal], leafsize=10, compact_nodes=True,
                           copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
-    roadmap = augment_roadmap(roadmap, sample_fn, num_samples=num_samples)
+    roadmap = roadmap.augment(sample_fn, num_samples=num_samples)
 
     samples, vertices, edges = roadmap
     neighbors_from_index = roadmap.outgoing_from_edges
@@ -252,17 +255,7 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, road
         for vertex1, vertex2 in edges:
             roadmap.check_edge(vertex1, vertex2, collision_fn, extend_fn)
 
-    # TODO: can compute cost between waypoints from extend_fn
-    distance_fn = get_distance_fn(weights, p_norm=p_norm)
-    if cost_fn is None:
-        cost_fn = distance_fn # TODO: additive cost, acceleration cost
-
-    weight_cache = {}
-    def weight_fn(v1, v2):
-        if (v1, v2) not in weight_cache:
-            weight_cache[v1, v2] = weight_cache[v2, v1] = cost_fn(samples[v1], samples[v2])
-        return weight_cache[v1, v2]
-
+    weight_fn = roadmap.get_cost
     #weight_fn = lambda v1, v2: cost_fn(samples[v1], samples[v2])
     #lazy_fn = lambda v1, v2: (v2 not in colliding_vertices)
     #lazy_fn = lambda v1, v2: ((v1, v2) not in colliding_edges) # TODO: score by length
@@ -305,8 +298,8 @@ def create_param_sequence(initial_samples=100, step_samples=100, **kwargs):
     return (merge_dicts(kwargs, {'num_samples': num_samples})
             for num_samples in irange(start=initial_samples, stop=INF, step=step_samples))
 
-def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, max_cost=INF, success_cost=0,
-                  param_sequence=None, weights=None, p_norm=2, max_time=INF, verbose=True, **kwargs):
+def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, max_cost=INF, success_cost=INF,
+                  param_sequence=None, weights=None, p_norm=2, max_time=INF, verbose=False, **kwargs):
     # TODO: bias to stay near the (past/hypothetical) path
     # TODO: proximity pessimistic collision checking
     # TODO: roadmap reuse in general
@@ -319,11 +312,10 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None,
     if param_sequence is None:
         param_sequence = create_param_sequence()
     weights = default_weights(start, weights=weights)
-    roadmap = Roadmap(weights, samples=[start, goal], leafsize=10, compact_nodes=True,
+    roadmap = Roadmap(weights, cost_fn, samples=[start, goal], leafsize=10, compact_nodes=True,
                       copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
     #roadmap = None
-    # LAST_ROADMAP = roadmap
-    # print(LAST_ROADMAP)
+    ROADMAPS.append(roadmap)
 
     best_path = None
     best_cost = max_cost

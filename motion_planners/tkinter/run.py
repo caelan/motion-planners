@@ -15,7 +15,7 @@ from .viewer import create_box, draw_environment, add_points, \
     add_roadmap, get_box_center, add_path, create_cylinder, add_timed_path
 from ..utils import user_input, profiler, INF, compute_path_cost, elapsed_time, remove_redundant, waypoints_from_path
 from ..prm import prm
-from ..lazy_prm import lazy_prm
+from ..lazy_prm import lazy_prm, ROADMAPS
 from ..rrt_connect import rrt_connect, birrt
 from ..rrt import rrt
 from ..rrt_star import rrt_star
@@ -226,6 +226,7 @@ def main():
             path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                          max_time=args.time, max_iterations=INF, num_samples=200,
                          restarts=2, smooth=0, algorithm=args.algorithm)
+            #print(ROADMAPS)
 
             #path = solve_lazy_prm(viewer, start, goal, sample_fn, extend_fn, collision_fn,
             #                      num_samples=200, max_time=args.time, max_cost=1.25*min_distance)
