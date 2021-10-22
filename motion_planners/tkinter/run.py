@@ -220,7 +220,7 @@ def main():
         for _ in range(args.restarts+1):
             start_time = time.time()
             collision_fn, colliding, cfree = wrap_collision_fn(get_collision_fn(environment, obstacles))
-            sample_fn, samples = wrap_sample_fn(get_sample_fn(environment, obstacles=[], use_halton=False)) # obstacles
+            sample_fn, samples = wrap_sample_fn(get_sample_fn(environment, obstacles=[], use_halton=True)) # obstacles
             extend_fn, roadmap = get_extend_fn(environment, obstacles=obstacles)  # obstacles | []
 
             path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,

@@ -113,14 +113,36 @@ def check_path(path, colliding_vertices, colliding_edges, samples, extend_fn, co
 ##################################################
 
 class Roadmap(object):
-    def __init__(self, samples=[], vertices=[], edges=set()):
-        self.samples = list(samples)
-        self.vertices = list(vertices)
-        self.edges = set(edges)
+    def __init__(self, weights, samples=[], p_norm=2, max_degree=6, max_distance=INF, approximate_eps=0., **kwargs):
+        self.weights = tuple(weights)
+        self.p_norm = p_norm
+        self.max_degree = max_degree
+        self.max_distance = max_distance
+        self.approximate_eps = approximate_eps
+        self.nearest = NearestNeighbors(embed_fn=get_embed_fn(self.weights), **kwargs)
+        self.edges = set()
+        self.add_samples(samples)
+    @property
+    def samples(self):
+        return self.nearest.data
+    @property
+    def vertices(self):
+        return list(range(len(self.samples))) # TODO: inefficient
     def __iter__(self):
         return iter([self.samples, self.vertices, self.edges])
     def outgoing_from_edges(self):
         return outgoing_from_edges(self.edges)
+    def add_samples(self, samples):
+        edges = set()
+        for v1, sample in self.nearest.add_data(samples):
+            # TODO: could dynamically compute distances
+            max_degree = min(self.max_degree, len(self.samples))
+            for d, v2, _ in self.nearest.query_neighbors(sample, k=max_degree, eps=self.approximate_eps,
+                                                         p=self.p_norm, distance_upper_bound=self.max_distance):
+                if (v1 != v2): # and (d <= self.max_distance):
+                    edges.update([(v1, v2), (v2, v1)])
+        self.edges.update(edges)
+        return edges
 
 ##################################################
 
@@ -139,14 +161,18 @@ class NearestNeighbors(object):
         self.kwargs = kwargs
         self.add_data(data)
     def add_data(self, data):
-        self.data.extend(data)
+        indices = []
+        for x in data:
+            indices.append(len(self.data))
+            self.data.append(x)
         if not self.data:
-            return
+            return zip(indices, data)
         embedded_data = list(map(self.embed_fn, self.data))
         self.kd_tree = KDTree(embedded_data,
                               #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None
                               **self.kwargs,
                               )
+        return zip(indices, data)
     def query_neighbors(self, x, **kwargs):
         # TODO: class **kwargs
         embedded = self.embed_fn(x)
@@ -156,31 +182,8 @@ class NearestNeighbors(object):
 
 ##################################################
 
-def compute_graph(samples, weights=None, p_norm=2, max_degree=6, max_distance=INF, approximate_eps=0.):
-    #assert (max_degree < INF) or (max_distance < INF)
-    max_degree = min(max_degree, len(samples))
-    vertices = list(range(len(samples)))
-    edges = set()
-    if not vertices:
-        return vertices, edges
-    if weights is None:
-        weights = np.ones(len(samples[0]))
-    kd_tree = NearestNeighbors(samples, embed_fn=get_embed_fn(weights),
-                               leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None)
-    for v1 in vertices:
-        # TODO: could dynamically compute distances
-        for d, v2, _ in kd_tree.query_neighbors(samples[v1], k=max_degree, eps=approximate_eps,
-                                                p=p_norm, distance_upper_bound=max_distance):
-            if (v1 != v2) and (d <= max_distance):
-                edges.update([(v1, v2), (v2, v1)])
-    # print(time.time() - start_time, len(edges), float(len(edges))/len(samples))
-    roadmap = Roadmap(samples, vertices, edges)
-    return roadmap
-
-##################################################
-
 def sample_roadmap(start, goal, sample_fn, distance_fn, num_samples=100,
-                   p_norm=2, max_cost=INF, max_time=INF, **kwargs):
+                   weights=None, max_cost=INF, max_time=INF, **kwargs):
     start_time = time.time()
     samples = [start, goal]
     # TODO: compute number of rejected samples
@@ -190,7 +193,10 @@ def sample_roadmap(start, goal, sample_fn, distance_fn, num_samples=100,
         if (max_cost == INF) or (distance_fn(start, conf) + distance_fn(conf, goal)) < max_cost:
             # TODO: only keep edges that move toward the goal
             samples.append(conf)
-    return compute_graph(samples, p_norm=p_norm, **kwargs)
+    if weights is None:
+        weights = np.ones(len(samples[0]))
+    return Roadmap(weights, samples=samples, leafsize=10, compact_nodes=True,
+                   copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
 
 def calculate_radius(d=2):
     # TODO: unify with get_threshold_fn
@@ -303,8 +309,8 @@ def create_param_sequence(initial_samples=100, step_samples=100, **kwargs):
     return (merge_dicts(kwargs, {'num_samples': num_samples})
             for num_samples in irange(start=initial_samples, stop=INF, step=step_samples))
 
-def lazy_prm_star(start, conf, sample_fn, extend_fn, collision_fn, cost_fn=None, max_cost=INF, success_cost=INF,
-                  param_sequence=None, weights=None, p_norm=2, max_time=INF, verbose=False, **kwargs):
+def lazy_prm_star(start, conf, sample_fn, extend_fn, collision_fn, cost_fn=None, max_cost=INF, success_cost=0,
+                  param_sequence=None, weights=None, p_norm=2, max_time=INF, verbose=True, **kwargs):
     # TODO: bias to stay near the (past/hypothetical) path
     # TODO: proximity pessimistic collision checking
     # TODO: roadmap reuse in general
