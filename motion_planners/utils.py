@@ -1,6 +1,6 @@
 from random import shuffle
 from itertools import islice
-from collections import deque
+from collections import deque, defaultdict
 import time
 import contextlib
 import pstats
@@ -300,3 +300,29 @@ def value_or_id(value):
     if is_hashable(value):
         return value
     return id(value)
+
+##################################################
+
+def incoming_from_edges(edges):
+    incoming_vertices = defaultdict(set)
+    for v1, v2 in edges:
+        incoming_vertices[v2].add(v1)
+    return incoming_vertices
+
+
+def outgoing_from_edges(edges):
+    # neighbors_from_index = {v: set() for v in vertices}
+    # for v1, v2 in edges:
+    #     neighbors_from_index[v1].add(v2)
+    outgoing_vertices = defaultdict(set)
+    for v1, v2 in edges:
+        outgoing_vertices[v1].add(v2)
+    return outgoing_vertices
+
+
+def adjacent_from_edges(edges):
+    undirected_edges = defaultdict(set)
+    for v1, v2 in edges:
+        undirected_edges[v1].add(v2)
+        undirected_edges[v2].add(v1)
+    return undirected_edges

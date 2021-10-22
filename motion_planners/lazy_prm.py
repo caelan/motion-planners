@@ -1,9 +1,9 @@
 from scipy.spatial.kdtree import KDTree
 from heapq import heappush, heappop
-from collections import namedtuple, defaultdict
+from collections import namedtuple
 
-from .utils import INF, elapsed_time, get_pairs, random_selector, default_selector, refine_waypoints, irange, \
-    merge_dicts, compute_path_cost, get_length, is_path
+from .utils import INF, elapsed_time, get_pairs, default_selector, refine_waypoints, irange, \
+    merge_dicts, compute_path_cost, get_length, is_path, outgoing_from_edges
 
 import time
 import numpy as np
@@ -112,6 +112,18 @@ def check_path(path, colliding_vertices, colliding_edges, samples, extend_fn, co
 
 ##################################################
 
+class Roadmap(object):
+    def __init__(self, samples=[], vertices=[], edges=set()):
+        self.samples = list(samples)
+        self.vertices = list(vertices)
+        self.edges = set(edges)
+    def __iter__(self):
+        return iter([self.samples, self.vertices, self.edges])
+    def outgoing_from_edges(self):
+        return outgoing_from_edges(self.edges)
+
+##################################################
+
 class NearestNeighbors(object):
     # https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html
@@ -162,31 +174,10 @@ def compute_graph(samples, weights=None, p_norm=2, max_degree=6, max_distance=IN
             if (v1 != v2) and (d <= max_distance):
                 edges.update([(v1, v2), (v2, v1)])
     # print(time.time() - start_time, len(edges), float(len(edges))/len(samples))
-    return vertices, edges
+    roadmap = Roadmap(samples, vertices, edges)
+    return roadmap
 
 ##################################################
-
-def incoming_from_edges(edges):
-    incoming_vertices = defaultdict(set)
-    for v1, v2 in edges:
-        incoming_vertices[v2].add(v1)
-    return incoming_vertices
-
-def outgoing_from_edges(edges):
-    # neighbors_from_index = {v: set() for v in vertices}
-    # for v1, v2 in edges:
-    #     neighbors_from_index[v1].add(v2)
-    outgoing_vertices = defaultdict(set)
-    for v1, v2 in edges:
-        outgoing_vertices[v1].add(v2)
-    return outgoing_vertices
-
-def adjacent_from_edges(edges):
-    undirected_edges = defaultdict(set)
-    for v1, v2 in edges:
-        undirected_edges[v1].add(v2)
-        undirected_edges[v2].add(v1)
-    return undirected_edges
 
 def sample_roadmap(start, goal, sample_fn, distance_fn, num_samples=100,
                    p_norm=2, max_cost=INF, max_time=INF, **kwargs):
@@ -199,8 +190,7 @@ def sample_roadmap(start, goal, sample_fn, distance_fn, num_samples=100,
         if (max_cost == INF) or (distance_fn(start, conf) + distance_fn(conf, goal)) < max_cost:
             # TODO: only keep edges that move toward the goal
             samples.append(conf)
-    vertices, edges = compute_graph(samples, p_norm=p_norm, **kwargs)
-    return samples, vertices, edges
+    return compute_graph(samples, p_norm=p_norm, **kwargs)
 
 def calculate_radius(d=2):
     # TODO: unify with get_threshold_fn
@@ -242,9 +232,10 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
     distance_fn = get_distance_fn(weights, p_norm=p_norm)
     # TODO: can compute cost between waypoints from extend_fn
 
-    samples, vertices, edges = sample_roadmap(start, goal, sample_fn, distance_fn, num_samples=num_samples,
-                                              p_norm=p_norm, max_cost=INF, **kwargs) # max_cost=max_cost,
-    neighbors_from_index = outgoing_from_edges(edges)
+    roadmap = sample_roadmap(start, goal, sample_fn, distance_fn, num_samples=num_samples,
+                             p_norm=p_norm, max_cost=INF, **kwargs) # max_cost=max_cost,
+    samples, vertices, edges = roadmap
+    neighbors_from_index = roadmap.outgoing_from_edges()
     start_index, end_index = 0, 1
     degree = np.average(list(map(len, neighbors_from_index.values())))
 
@@ -264,7 +255,14 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
 
     if cost_fn is None:
         cost_fn = distance_fn # TODO: additive cost, acceleration cost
-    weight_fn = lambda v1, v2: cost_fn(samples[v1], samples[v2])
+
+    weight_cache = {}
+    def weight_fn(v1, v2):
+        if (v1, v2) not in weight_cache:
+            weight_cache[v1, v2] = weight_cache[v2, v1] = cost_fn(samples[v1], samples[v2])
+        return weight_cache[v1, v2]
+
+    #weight_fn = lambda v1, v2: cost_fn(samples[v1], samples[v2])
     #lazy_fn = lambda v1, v2: (v2 not in colliding_vertices)
     #lazy_fn = lambda v1, v2: ((v1, v2) not in colliding_edges) # TODO: score by length
     #weight_fn = lazy_fn
@@ -299,14 +297,17 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
 
 ##################################################
 
-def create_param_sequence(initial_samples=10, step_samples=10, **kwargs):
+def create_param_sequence(initial_samples=100, step_samples=100, **kwargs):
     # TODO: iteratively increase the parameters
     # TODO: generalize to degree, distance, cost
     return (merge_dicts(kwargs, {'num_samples': num_samples})
             for num_samples in irange(start=initial_samples, stop=INF, step=step_samples))
 
-def lazy_prm_star(start, conf, sample_fn, extend_fn, collision_fn, cost_fn=None, param_sequence=None,
-                  weights=None, p_norm=2, max_time=INF, verbose=True, **kwargs):
+def lazy_prm_star(start, conf, sample_fn, extend_fn, collision_fn, cost_fn=None, max_cost=INF, success_cost=INF,
+                  param_sequence=None, weights=None, p_norm=2, max_time=INF, verbose=False, **kwargs):
+    # TODO: bias to stay near the (past/hypothetical) path
+    # TODO: proximity pessimistic collision checking
+    # TODO: roadmap reuse in general
     start_time = time.time()
     if cost_fn is None:
         if weights is None:
@@ -317,7 +318,7 @@ def lazy_prm_star(start, conf, sample_fn, extend_fn, collision_fn, cost_fn=None,
     if param_sequence is None:
         param_sequence = create_param_sequence()
     best_path = None
-    best_cost = INF
+    best_cost = max_cost
     for i, params in enumerate(param_sequence):
         remaining_time = max_time - elapsed_time(start_time)
         if remaining_time <= 0.:
@@ -335,4 +336,6 @@ def lazy_prm_star(start, conf, sample_fn, extend_fn, collision_fn, cost_fn=None,
         if new_cost < best_cost:
             best_path = new_path
             best_cost = new_cost
+        if best_cost < success_cost:
+            break
     return best_path
