@@ -1,6 +1,6 @@
 from scipy.spatial.kdtree import KDTree
 from heapq import heappush, heappop
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 from .utils import INF, elapsed_time, get_pairs, default_selector, refine_waypoints, irange, \
     merge_dicts, compute_path_cost, get_length, is_path, outgoing_from_edges
@@ -88,25 +88,27 @@ def get_distance_fn(weights, p_norm=2):
 
 ##################################################
 
-def check_vertex(v, samples, colliding_vertices, collision_fn):
+def check_vertex(roadmap, v, samples, collision_fn):
+    colliding_vertices = roadmap.colliding_vertices
     if v not in colliding_vertices:
         # TODO: could update the colliding adjacent edges as well
         colliding_vertices[v] = collision_fn(samples[v])
     return not colliding_vertices[v]
 
-def check_edge(v1, v2, samples, colliding_edges, collision_fn, extend_fn):
+def check_edge(roadmap, v1, v2, samples, collision_fn, extend_fn):
+    colliding_edges = roadmap.colliding_edges
     if (v1, v2) not in colliding_edges:
         segment = default_selector(extend_fn(samples[v1], samples[v2]))
         colliding_edges[v1, v2] = any(map(collision_fn, segment))
         colliding_edges[v2, v1] = colliding_edges[v1, v2]
     return not colliding_edges[v1, v2]
 
-def check_path(path, colliding_vertices, colliding_edges, samples, extend_fn, collision_fn):
+def check_path(roadmap, path, samples, extend_fn, collision_fn):
     for v in default_selector(path):
-        if not check_vertex(v, samples, colliding_vertices, collision_fn):
+        if not check_vertex(roadmap, v, samples, collision_fn):
             return False
     for v1, v2 in default_selector(get_pairs(path)):
-        if not check_edge(v1, v2, samples, colliding_edges, collision_fn, extend_fn):
+        if not check_edge(roadmap, v1, v2, samples, collision_fn, extend_fn):
             return False
     return True
 
@@ -121,6 +123,9 @@ class Roadmap(object):
         self.approximate_eps = approximate_eps
         self.nearest = NearestNeighbors(embed_fn=get_embed_fn(self.weights), **kwargs)
         self.edges = set()
+        self.outgoing_from_edges = defaultdict(set)
+        self.colliding_vertices = {}
+        self.colliding_edges = {}
         self.add_samples(samples)
     @property
     def samples(self):
@@ -130,8 +135,6 @@ class Roadmap(object):
         return list(range(len(self.samples))) # TODO: inefficient
     def __iter__(self):
         return iter([self.samples, self.vertices, self.edges])
-    def outgoing_from_edges(self):
-        return outgoing_from_edges(self.edges)
     def add_samples(self, samples):
         edges = set()
         for v1, sample in self.nearest.add_data(samples):
@@ -140,9 +143,15 @@ class Roadmap(object):
             for d, v2, _ in self.nearest.query_neighbors(sample, k=max_degree, eps=self.approximate_eps,
                                                          p=self.p_norm, distance_upper_bound=self.max_distance):
                 if (v1 != v2): # and (d <= self.max_distance):
+                    self.outgoing_from_edges[v1].add(v2)
+                    self.outgoing_from_edges[v2].add(v1)
                     edges.update([(v1, v2), (v2, v1)])
         self.edges.update(edges)
         return edges
+    def neighbors_fn(self, v1):
+        for v2 in self.outgoing_from_edges[v1]:
+            if not self.colliding_vertices.get(v2, False) and not self.colliding_edges.get((v1, v2), False):
+                yield v2
 
 ##################################################
 
@@ -190,9 +199,9 @@ def sample_roadmap(start, goal, sample_fn, distance_fn, num_samples=100,
     while (len(samples) < num_samples) and (elapsed_time(start_time) < max_time):
         conf = sample_fn() # TODO: include
         # TODO: bound function based on distance_fn(start, conf) and individual distances
-        if (max_cost == INF) or (distance_fn(start, conf) + distance_fn(conf, goal)) < max_cost:
-            # TODO: only keep edges that move toward the goal
-            samples.append(conf)
+        #if (max_cost == INF) or (distance_fn(start, conf) + distance_fn(conf, goal)) < max_cost:
+        # TODO: only keep edges that move toward the goal
+        samples.append(conf)
     if weights is None:
         weights = np.ones(len(samples[0]))
     return Roadmap(weights, samples=samples, leafsize=10, compact_nodes=True,
@@ -241,23 +250,19 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
     roadmap = sample_roadmap(start, goal, sample_fn, distance_fn, num_samples=num_samples,
                              p_norm=p_norm, max_cost=INF, **kwargs) # max_cost=max_cost,
     samples, vertices, edges = roadmap
-    neighbors_from_index = roadmap.outgoing_from_edges()
+    neighbors_from_index = roadmap.outgoing_from_edges
     start_index, end_index = 0, 1
     degree = np.average(list(map(len, neighbors_from_index.values())))
 
     # TODO: update collision occupancy based on proximity to existing colliding (for diversity as well)
     # TODO: minimize the maximum distance to colliding
-    colliding_vertices, colliding_edges = {}, {}
-    def neighbors_fn(v1):
-        for v2 in neighbors_from_index[v1]:
-            if not colliding_vertices.get(v2, False) and not colliding_edges.get((v1, v2), False):
-                yield v2
+    neighbors_fn = roadmap.neighbors_fn
 
     if not lazy:
         for vertex in vertices:
-            check_vertex(vertex, samples, colliding_vertices, collision_fn)
+            check_vertex(roadmap, vertex, samples, collision_fn)
         for vertex1, vertex2 in edges:
-            check_edge(vertex1, vertex2, samples, colliding_edges, collision_fn, extend_fn)
+            check_edge(roadmap, vertex1, vertex2, samples, collision_fn, extend_fn)
 
     if cost_fn is None:
         cost_fn = distance_fn # TODO: additive cost, acceleration cost
@@ -291,15 +296,16 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
         cost = sum(weight_fn(v1, v2) for v1, v2 in get_pairs(lazy_path))
         if verbose:
             print('Length: {} | Cost: {:.3f} | Vertices: {} | Edges: {} | Degree: {:.3f} | Time: {:.3f}'.format(
-                len(lazy_path), cost, len(colliding_vertices), len(colliding_edges), degree, elapsed_time(start_time)))
-        if check_path(lazy_path, colliding_vertices, colliding_edges, samples, extend_fn, collision_fn):
+                len(lazy_path), cost, len(roadmap.colliding_vertices), len(roadmap.colliding_edges),
+                degree, elapsed_time(start_time)))
+        if check_path(roadmap, lazy_path, samples, extend_fn, collision_fn):
             path = lazy_path
 
     if path is None:
-        return path, samples, edges, colliding_vertices, colliding_edges
+        return path, samples, edges, roadmap.colliding_vertices, roadmap.colliding_edges
     waypoints = [samples[v] for v in path]
     solution = [start] + refine_waypoints(waypoints, extend_fn)
-    return solution, samples, edges, colliding_vertices, colliding_edges
+    return solution, samples, edges, roadmap.colliding_vertices, roadmap.colliding_edges
 
 ##################################################
 
