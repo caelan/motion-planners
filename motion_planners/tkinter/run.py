@@ -106,10 +106,10 @@ def retime_path(path, collision_fn=lambda q: False, smooth=False, **kwargs):
 def problem1():
     obstacles = [
         create_box(center=(.35, .75), extents=(.25, .25)),
-        create_box(center=(.75, .35), extents=(.25, .25)),
-        #create_box(center=(.75, .35), extents=(.225, .225)),
+        #create_box(center=(.75, .35), extents=(.25, .25)),
+        create_box(center=(.75, .35), extents=(.22, .22)),
         create_box(center=(.5, .5), extents=(.25, .25)),
-        #create_box(center=(.5, .5), extents=(.225, .225)),
+        #create_box(center=(.5, .5), extents=(.22, .22)),
 
         create_cylinder(center=(.25, .25), radius=.1),
     ]
