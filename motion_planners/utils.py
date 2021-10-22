@@ -165,10 +165,20 @@ def get_unit_vector(vec):
     return np.array(vec) / norm
 
 
+def is_path(path):
+    return path is not None
+
+
 def compute_path_cost(path, cost_fn=get_distance):
-    if path is None:
+    if not is_path(path):
         return INF
     return sum(cost_fn(*pair) for pair in get_pairs(path))
+
+
+def get_length(path):
+    if not is_path(path):
+        return INF
+    return len(path)
 
 
 def get_difference(q2, q1):
@@ -275,3 +285,18 @@ def bisect_selector(path):
 
 
 default_selector = bisect_selector # random_selector
+
+##################################################
+
+def is_hashable(value):
+    #return isinstance(value, Hashable) # TODO: issue with hashable and numpy 2.7.6
+    try:
+        hash(value)
+    except TypeError:
+        return False
+    return True
+
+def value_or_id(value):
+    if is_hashable(value):
+        return value
+    return id(value)

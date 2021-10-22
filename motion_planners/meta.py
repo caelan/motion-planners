@@ -1,7 +1,7 @@
 import time
 
 from .lattice import lattice
-from .lazy_prm import lazy_prm
+from .lazy_prm import lazy_prm, lazy_prm_star
 from .prm import prm
 from .rrt import rrt
 from .rrt_connect import rrt_connect, birrt
@@ -103,6 +103,8 @@ def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorith
     elif algorithm == 'lazy_prm':
         path = lazy_prm(start, goal, sample_fn, extend_fn, collision_fn,
                         num_samples=num_samples, max_time=max_time)[0]
+    elif algorithm == 'lazy_prm_star':
+        path = lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, max_time=max_time) # initial_samples=num_samples,
     elif algorithm == 'rrt':
         path = rrt(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                    max_iterations=max_iterations, max_time=max_time)

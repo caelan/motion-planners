@@ -336,18 +336,20 @@ class Curve(object):
     @property
     def breakpoints(self):
         return self.poly.x
-    def __call__(self, *args, **kwargs):
+    def at(self, *args, **kwargs):
         return self.poly(*args, **kwargs)
+    def __call__(self, *args, **kwargs):
+        return self.at(*args, **kwargs)
     def derivative(self, *args, **kwargs):
         return Curve(self.poly.derivative(*args, **kwargs))
     def antiderivative(self, *args, **kwargs):
         return Curve(self.poly.antiderivative(*args, **kwargs))
     def roots(self, *args, **kwargs):
         return self.poly.roots(*args, **kwargs)
-    def sample_times(self, dt):
+    def sample_times(self, dt=1./60):
         return np.append(np.arange(self.start_t, self.end_t, step=dt), [self.end_t])
     def sample(self, *args, **kwargs):
         for t in self.sample_times(*args, **kwargs):
-            yield self(t)
+            yield self.at(t)
     def __str__(self):
         return '{}(d={}, t=[{:.2f},{:.2f}])'.format(self.__class__.__name__, self.dim, self.start_t, self.end_t)

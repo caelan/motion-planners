@@ -2,8 +2,8 @@ from scipy.spatial.kdtree import KDTree
 from heapq import heappush, heappop
 from collections import namedtuple, defaultdict
 
-from .utils import INF, elapsed_time, get_pairs, random_selector, default_selector, refine_waypoints
-from .smoothing import smooth_path
+from .utils import INF, elapsed_time, get_pairs, random_selector, default_selector, refine_waypoints, irange, \
+    merge_dicts, compute_path_cost, get_length, is_path
 
 import time
 import numpy as np
@@ -24,7 +24,7 @@ def dijkstra(start_v, neighbors_fn, cost_fn=unit_cost_fn):
     # Update the heuristic over time
     # TODO: overlap with discrete
     # TODO: all pairs shortest paths
-    start_g = 0
+    start_g = 0.
     visited = {start_v: Node(start_g, None)}
     queue = [(start_g, start_v)]
     while queue:
@@ -57,7 +57,7 @@ def wastar_search(start_v, end_v, neighbors_fn, cost_fn=unit_cost_fn,
     goal_test = lambda v: v == end_v
 
     start_time = time.time()
-    start_g = 0
+    start_g = 0.
     start_h = heuristic_fn(start_v)
     visited = {start_v: Node(start_g, None)}
     queue = [(priority_fn(start_g, start_h), start_g, start_v)]
@@ -72,7 +72,7 @@ def wastar_search(start_v, end_v, neighbors_fn, cost_fn=unit_cost_fn,
             if (next_v not in visited) or (next_g < visited[next_v].g):
                 visited[next_v] = Node(next_g, current_v)
                 next_h = heuristic_fn(next_v)
-                if priority_fn(next_g, next_h) < max_cost:
+                if (next_g + next_h) < max_cost: # Assumes admissible
                     next_p = priority_fn(next_g, next_h)
                     heappush(queue, (next_p, next_g, next_v))
     return None
@@ -112,6 +112,38 @@ def check_path(path, colliding_vertices, colliding_edges, samples, extend_fn, co
 
 ##################################################
 
+class NearestNeighbors(object):
+    # https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html
+    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html
+    # TODO: approximate KDTrees
+    # https://github.com/lmcinnes/pynndescent
+    # https://github.com/spotify/annoy
+    # https://github.com/flann-lib/flann
+    def __init__(self, data=[], embed_fn=lambda x: x, **kwargs):
+        # TODO: maintain tree and brute-force list
+        self.data = [] # TODO: self.kd_tree.data
+        self.kd_tree = None
+        self.embed_fn = embed_fn
+        self.kwargs = kwargs
+        self.add_data(data)
+    def add_data(self, data):
+        self.data.extend(data)
+        if not self.data:
+            return
+        embedded_data = list(map(self.embed_fn, self.data))
+        self.kd_tree = KDTree(embedded_data,
+                              #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None
+                              **self.kwargs,
+                              )
+    def query_neighbors(self, x, **kwargs):
+        # TODO: class **kwargs
+        embedded = self.embed_fn(x)
+        # k=1, eps=0, p=2, distance_upper_bound=inf, workers=1
+        distances, indices = self.kd_tree.query(embedded, **kwargs)
+        return [(d, i, self.data[i]) for d, i in zip(distances, indices)]
+
+##################################################
+
 def compute_graph(samples, weights=None, p_norm=2, max_degree=6, max_distance=INF, approximate_eps=0.):
     #assert (max_degree < INF) or (max_distance < INF)
     max_degree = min(max_degree, len(samples))
@@ -121,21 +153,13 @@ def compute_graph(samples, weights=None, p_norm=2, max_degree=6, max_distance=IN
         return vertices, edges
     if weights is None:
         weights = np.ones(len(samples[0]))
-    embed_fn = get_embed_fn(weights)
-    embedded = list(map(embed_fn, samples))
-    # https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html
-    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html
-    # TODO: approximate KDTrees
-    # https://github.com/lmcinnes/pynndescent
-    # https://github.com/spotify/annoy
-    # https://github.com/flann-lib/flann
-    kd_tree = KDTree(embedded)
+    kd_tree = NearestNeighbors(samples, embed_fn=get_embed_fn(weights),
+                               leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None)
     for v1 in vertices:
         # TODO: could dynamically compute distances
-        distances, neighbors = kd_tree.query(embedded[v1], k=max_degree, eps=approximate_eps,
-                                             p=p_norm, distance_upper_bound=max_distance)
-        for d, v2 in zip(distances, neighbors):
-            if (d <= max_distance) and (v1 != v2):
+        for d, v2, _ in kd_tree.query_neighbors(samples[v1], k=max_degree, eps=approximate_eps,
+                                                p=p_norm, distance_upper_bound=max_distance):
+            if (v1 != v2) and (d <= max_distance):
                 edges.update([(v1, v2), (v2, v1)])
     # print(time.time() - start_time, len(edges), float(len(edges))/len(samples))
     return vertices, edges
@@ -194,7 +218,7 @@ def calculate_radius(d=2):
 ##################################################
 
 def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_samples=100,
-             weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, w=0., **kwargs): #, max_paths=INF):
+             weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, w=1., verbose=True, **kwargs): #, max_paths=INF):
     """
     :param start: Start configuration - conf
     :param goal: End configuration - conf
@@ -242,14 +266,16 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
         cost_fn = distance_fn # TODO: additive cost, acceleration cost
     weight_fn = lambda v1, v2: cost_fn(samples[v1], samples[v2])
     #lazy_fn = lambda v1, v2: (v2 not in colliding_vertices)
-    lazy_fn = lambda v1, v2: ((v1, v2) not in colliding_edges) # TODO: score by length
+    #lazy_fn = lambda v1, v2: ((v1, v2) not in colliding_edges) # TODO: score by length
     #weight_fn = lazy_fn
     #weight_fn = lambda v1, v2: (lazy_fn(v1, v2), cost_fn(samples[v1], samples[v2])) # TODO:
     #weight_fn = lambda v1, v2: ORDINAL*lazy_fn(v1, v2) + cost_fn(samples[v1], samples[v2])
     #w = 0
 
-    visited = dijkstra(end_index, neighbors_fn, cost_fn)
-    heuristic_fn = lambda v: visited[v].g if v in visited else INF
+    visited = dijkstra(end_index, neighbors_fn, weight_fn)
+    heuristic_fn = lambda v: visited[v].g if (v in visited) else INF
+    #heuristic_fn = zero_heuristic_fn
+    #heuristic_fn = lambda v: weight_fn(v, end_index)
     path = None
     while (elapsed_time(start_time) < max_time) and (path is None): # TODO: max_attempts
         # TODO: extra cost to prioritize reusing checked edges
@@ -259,8 +285,9 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
         if lazy_path is None:
             break
         cost = sum(weight_fn(v1, v2) for v1, v2 in get_pairs(lazy_path))
-        print('Length: {} | Cost: {:.3f} | Vertices: {} | Edges: {} | Degree: {:.3f} | Time: {:.3f}'.format(
-            len(lazy_path), cost, len(colliding_vertices), len(colliding_edges), degree, elapsed_time(start_time)))
+        if verbose:
+            print('Length: {} | Cost: {:.3f} | Vertices: {} | Edges: {} | Degree: {:.3f} | Time: {:.3f}'.format(
+                len(lazy_path), cost, len(colliding_vertices), len(colliding_edges), degree, elapsed_time(start_time)))
         if check_path(lazy_path, colliding_vertices, colliding_edges, samples, extend_fn, collision_fn):
             path = lazy_path
 
@@ -272,19 +299,40 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, num_
 
 ##################################################
 
-def replan_loop(start_conf, end_conf, sample_fn, extend_fn, collision_fn, params_list, smooth=0, max_time=INF, **kwargs):
-    # TODO: currently unused
+def create_param_sequence(initial_samples=10, step_samples=10, **kwargs):
     # TODO: iteratively increase the parameters
+    # TODO: generalize to degree, distance, cost
+    return (merge_dicts(kwargs, {'num_samples': num_samples})
+            for num_samples in irange(start=initial_samples, stop=INF, step=step_samples))
+
+def lazy_prm_star(start, conf, sample_fn, extend_fn, collision_fn, cost_fn=None, param_sequence=None,
+                  weights=None, p_norm=2, max_time=INF, verbose=True, **kwargs):
     start_time = time.time()
-    if collision_fn(start_conf) or collision_fn(end_conf):
-        return None
-    from .meta import direct_path
-    path = direct_path(start_conf, end_conf, extend_fn, collision_fn)
-    if path is not None:
-        return path
-    for num_samples in params_list: # TODO: generalize to degree, distance, cost,
-        path = lazy_prm(start_conf, end_conf, sample_fn, extend_fn, collision_fn,
-                        num_samples=num_samples, max_time=max_time-elapsed_time(start_time), **kwargs)
-        if path is not None:
-            return smooth_path(path, extend_fn, collision_fn, max_iterations=smooth)
-    return None
+    if cost_fn is None:
+        if weights is None:
+            d = len(start)
+            weights = np.ones(d)
+        distance_fn = get_distance_fn(weights, p_norm=p_norm)
+        cost_fn = distance_fn # TODO: additive cost, acceleration cost
+    if param_sequence is None:
+        param_sequence = create_param_sequence()
+    best_path = None
+    best_cost = INF
+    for i, params in enumerate(param_sequence):
+        remaining_time = max_time - elapsed_time(start_time)
+        if remaining_time <= 0.:
+            break
+        if verbose:
+            print('\nIteration: {} | Cost: {:.3f} | Elapsed: {:.3f} | Remaining: {:.3f} | Params: {}'.format(
+                i, best_cost, elapsed_time(start_time), remaining_time, params))
+        new_path = lazy_prm(start, conf, sample_fn, extend_fn, collision_fn,
+                                cost_fn=cost_fn, weights=weights, p_norm=p_norm,
+                                max_time=remaining_time, max_cost=best_cost,
+                                verbose=verbose, **params, **kwargs)[0]
+        new_cost = compute_path_cost(new_path, cost_fn=cost_fn)
+        if verbose:
+            print(is_path(new_path), new_cost, get_length(new_path))
+        if new_cost < best_cost:
+            best_path = new_path
+            best_cost = new_cost
+    return best_path
