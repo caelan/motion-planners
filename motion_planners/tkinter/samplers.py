@@ -5,8 +5,8 @@ import numpy as np
 from .viewer import is_collision_free, contains, point_collides, sample_line
 from ..utils import interval_generator, get_distance, get_delta
 
-def get_distance_fn(weights):
-    difference_fn = get_delta
+def get_distance_fn(weights, difference_fn=get_delta):
+    # TODO: careful with circular joints
     def fn(q1, q2):
         diff = np.array(difference_fn(q2, q1))
         return np.sqrt(np.dot(weights, diff * diff))

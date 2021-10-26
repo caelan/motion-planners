@@ -6,14 +6,16 @@ import time
 import random
 
 from ..meta import solve
-from ..trajectory.linear import solve_multi_linear
+from ..trajectory.linear import solve_multi_linear, solve_linear, get_default_limits
 from ..trajectory.discretize import time_discretize_curve, V_MAX, A_MAX
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn, wrap_collision_fn, wrap_sample_fn
 from ..trajectory.smooth import smooth_curve, get_curve_collision_fn
 from ..trajectory.limits import analyze_continuity
+from ..trajectory.retime import spline_duration
 from .viewer import create_box, draw_environment, add_points, \
     add_roadmap, get_box_center, add_path, create_cylinder, add_timed_path
-from ..utils import user_input, profiler, INF, compute_path_cost, elapsed_time, remove_redundant, waypoints_from_path
+from ..utils import user_input, profiler, INF, compute_path_cost, elapsed_time, remove_redundant, \
+    waypoints_from_path, get_delta, get_distance
 from ..prm import prm
 from ..lazy_prm import lazy_prm, ROADMAPS
 from ..rrt_connect import rrt_connect, birrt
@@ -33,6 +35,29 @@ ALGORITHMS = [
     # TODO: RRT in position/velocity space using spline interpolation
     # TODO: https://ompl.kavrakilab.org/planners.html
 ]
+
+##################################################
+
+def get_cost_fn(distance_fn=get_distance, constant=0., coefficient=1.):
+    # TODO: bounding boxes for the links that are moving
+    # TODO: surface area hands stuff
+
+    def fn(q1, q2):
+        return constant + coefficient*distance_fn(q1, q2)
+    return fn
+
+def get_duration_fn(difference_fn=get_delta, t_constant=0., t_min=0., **kwargs):
+    v_max, a_max = get_default_limits(d=None, **kwargs)
+    def fn(q1, q2):
+        # TODO: be careful that not colinear with other waypoints
+        difference = difference_fn(q1, q2)
+        t_transit = 0.
+        if not np.allclose(np.zeros(len(difference)), difference, atol=1e-6, rtol=0):
+            curve = solve_linear(difference, v_max, a_max) # TODO: make faster
+            t_transit = spline_duration(curve)
+        t = t_constant + t_transit
+        return max(t_min, t) # TODO: clip function
+    return fn
 
 ##################################################
 
@@ -223,9 +248,13 @@ def main():
             sample_fn, samples = wrap_sample_fn(get_sample_fn(environment, obstacles=[], use_halton=True)) # obstacles
             extend_fn, roadmap = get_extend_fn(environment, obstacles=obstacles)  # obstacles | []
 
-            path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
-                         max_time=args.time, max_iterations=INF, num_samples=200,
-                         restarts=2, smooth=0, algorithm=args.algorithm)
+            # TODO: shortcutting with this function
+            #cost_fn = distance_fn
+            #cost_fn = get_cost_fn(distance_fn, constant=1e-2, coefficient=1.)
+            cost_fn = get_duration_fn(v_max=V_MAX, a_max=A_MAX)
+            path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, cost_fn=cost_fn,
+                         max_time=args.time, max_iterations=INF, num_samples=50, # success_cost=0,
+                         restarts=2, smooth=0, algorithm=args.algorithm, verbose=True)
             #print(ROADMAPS)
 
             #path = solve_lazy_prm(viewer, start, goal, sample_fn, extend_fn, collision_fn,
@@ -248,26 +277,30 @@ def main():
                 add_points(viewer, colliding, color='red', radius=2)
                 add_points(viewer, cfree, color='blue', radius=2) # green
 
-            print('Solutions ({}): {} | Colliding: {} | CFree: {} | Time: {:.3f}'.format(len(paths), [(len(path), round(compute_path_cost(
-                path, distance_fn), 3)) for path in paths], len(colliding), len(cfree), elapsed_time(start_time)))
+            print('Solutions ({}): {} | Colliding: {} | CFree: {} | Time: {:.3f}'.format(
+                len(paths), [(len(path), round(compute_path_cost(path, cost_fn), 3)) for path in paths],
+                len(colliding), len(cfree), elapsed_time(start_time)))
             for i, path in enumerate(paths):
-                cost = compute_path_cost(path, distance_fn)
+                cost = compute_path_cost(path, cost_fn)
                 print('{}) Length: {} | Cost: {:.3f} | Ratio: {:.3f}'.format(i, len(path), cost, cost/min_distance))
                 #path = path[:1] + path[-2:]
                 path = waypoints_from_path(path)
                 add_path(viewer, path, color='green')
-                #curve = interpolate_path(path) # , collision_fn=collision_fn)
-                curve = retime_path(path, collision_fn=collision_fn, smooth=args.smooth) # , smooth=True)
-                times, path = time_discretize_curve(curve)
-                times = [np.linalg.norm(curve(t, nu=1), ord=INF) for t in times]
-                #add_points(viewer, [curve(t) for t in curve.x])
-                #add_path(viewer, path, color='red')
-                add_timed_path(viewer, times, path) # TODO: add curve
+                if False:
+                    #curve = interpolate_path(path) # , collision_fn=collision_fn)
+                    curve = retime_path(path, collision_fn=collision_fn, smooth=args.smooth) # , smooth=True)
+                    times, path = time_discretize_curve(curve)
+                    times = [np.linalg.norm(curve(t, nu=1), ord=INF) for t in times]
+                    #add_points(viewer, [curve(t) for t in curve.x])
+                    #add_path(viewer, path, color='red')
+                    add_timed_path(viewer, times, path) # TODO: add curve
 
             if args.smooth:
                 for path in paths:
                     extend_fn, roadmap = get_extend_fn(environment, obstacles=obstacles)  # obstacles | []
-                    smoothed = smooth_path(path, extend_fn, collision_fn, max_iterations=INF, max_time=args.time)
+                    #cost_fn = distance_fn
+                    smoothed = smooth_path(path, extend_fn, collision_fn, distance_fn=cost_fn, max_iterations=INF, max_time=args.time,
+                                           converge_time=1e-1, verbose=True)
                     print('Smoothed distance_fn: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
                     add_path(viewer, smoothed, color='red')
     user_input('Finish?')

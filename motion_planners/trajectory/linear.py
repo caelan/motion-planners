@@ -129,6 +129,7 @@ def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0.):
     d = abs(x2 - x1)
     # if v_max == INF:
     #     raise NotImplementedError()
+    # TODO: more efficient version
 
     if a_max == INF:
         T = d / v_max
@@ -159,21 +160,32 @@ def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0.):
 
 ##################################################
 
-def solve_multi_linear(positions, v_max=None, a_max=None, **kwargs):
-    from scipy.interpolate import PPoly
-    positions = waypoints_from_path(positions, **kwargs)
-    d = len(positions[0])
+def get_default_limits(d=None, v_max=None, a_max=None):
+    # TODO: unify with find_lower_bound
+    # TODO: figure out d from the bounds
     if v_max is None:
         v_max = INF*np.ones(d)
     if a_max is None:
         a_max = INF*np.ones(d)
     assert len(v_max) == len(a_max)
+    return v_max, a_max
+
+def solve_linear(difference, v_max, a_max):
+    # TODO: careful with circular joins
+    # TODO: careful if difference is zero
+    unit_v_max = min(np.divide(v_max, np.absolute(difference)))
+    unit_a_max = min(np.divide(a_max, np.absolute(difference)))
+    return opt_straight_line(x1=0., x2=1., v_max=unit_v_max, a_max=unit_a_max)
+
+def solve_multi_linear(positions, v_max=None, a_max=None, **kwargs):
+    from scipy.interpolate import PPoly
+    positions = waypoints_from_path(positions, **kwargs)
+    d = len(positions[0])
+    v_max, a_max = get_default_limits(d, v_max=v_max, a_max=a_max)
     splines = []
     for x1, x2 in get_pairs(positions):
-        difference = np.subtract(x2, x1) # TODO: pass if too small
-        unit_v_max = min(np.divide(v_max, np.absolute(difference)))
-        unit_a_max = min(np.divide(a_max, np.absolute(difference)))
-        curve = opt_straight_line(x1=0., x2=1., v_max=unit_v_max, a_max=unit_a_max)
+        difference = np.subtract(x2, x1)  # TODO: pass if too small
+        curve = solve_linear(difference, v_max, a_max)
         c = np.zeros(curve.c.shape + (d,))
         for k in range(d):
             c[:,:,k] = difference[k]*curve.c

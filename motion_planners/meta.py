@@ -1,7 +1,7 @@
 import time
 
 from .lattice import lattice
-from .lazy_prm import lazy_prm, lazy_prm_star
+from .lazy_prm import lazy_prm, lazy_prm_star, create_param_sequence
 from .prm import prm
 from .rrt import rrt
 from .rrt_connect import rrt_connect, birrt
@@ -89,7 +89,9 @@ def solve_and_smooth(solve_fn, q1, q2, distance_fn, sample_fn, extend_fn, collis
 #################################################################
 
 def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorithm='birrt',
-          max_time=INF, max_iterations=INF, num_samples=100, smooth=None, **kwargs):
+          max_time=INF, max_iterations=INF, num_samples=100, smooth=None, weights=None,
+          cost_fn=None, success_cost=INF, verbose=False, **kwargs):
+    # TODO: better shared default options
     # TODO: allow distance_fn to be skipped
     # TODO: return lambda function
     start_time = time.time()
@@ -102,9 +104,12 @@ def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorith
                    num_samples=num_samples)
     elif algorithm == 'lazy_prm':
         path = lazy_prm(start, goal, sample_fn, extend_fn, collision_fn,
-                        num_samples=num_samples, max_time=max_time)[0]
+                        num_samples=num_samples, max_time=max_time, weights=weights)[0]
     elif algorithm == 'lazy_prm_star':
-        path = lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, max_time=max_time) # initial_samples=num_samples,
+        param_sequence = create_param_sequence(initial_samples=num_samples)
+        path = lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, param_sequence=param_sequence,
+                             max_time=max_time, weights=weights, cost_fn=cost_fn, success_cost=success_cost,
+                             verbose=verbose) # **kwargs)
     elif algorithm == 'rrt':
         path = rrt(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                    max_iterations=max_iterations, max_time=max_time)
@@ -122,4 +127,5 @@ def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorith
         path = lattice(start, goal, extend_fn, collision_fn, distance_fn=distance_fn, max_time=INF)
     else:
         raise NotImplementedError(algorithm)
-    return smooth_path(path, extend_fn, collision_fn, max_iterations=smooth, max_time=max_time-elapsed_time(start_time))
+    return smooth_path(path, extend_fn, collision_fn, max_iterations=smooth,
+                       max_time=max_time-elapsed_time(start_time))

@@ -26,6 +26,7 @@ def dijkstra(start_v, neighbors_fn, cost_fn=unit_cost_fn):
     # Update the heuristic over time
     # TODO: overlap with discrete
     # TODO: all pairs shortest paths
+    # TODO: max_cost
     start_g = 0.
     visited = {start_v: Node(start_g, None)}
     queue = [(start_g, start_v)]
@@ -92,7 +93,8 @@ def get_distance_fn(weights, p_norm=2):
 
 class Roadmap(object):
     def __init__(self, weights, cost_fn, samples=[], p_norm=2, max_degree=5, max_distance=INF, approximate_eps=0., **kwargs):
-        self.weights = tuple(weights)
+        # TODO: custom cost_fn
+        self.weights = np.array(weights)
         self.cost_fn = cost_fn
         self.p_norm = p_norm
         self.max_degree = max_degree
@@ -166,7 +168,7 @@ class Roadmap(object):
     def get_cost(self, v1, v2):
         edge = (v1, v2)
         if edge not in self.edge_costs:
-            self.edge_costs[v1, v2] = self.edge_costs[v2, v1] = self.cost_fn(self.samples[v1], self.samples[v2])
+            self.edge_costs[edge] = self.edge_costs[edge] = self.cost_fn(self.samples[v1], self.samples[v2])
         return self.edge_costs[edge]
     def sample(self, sample_fn, num_samples, max_time=INF):
         # TODO: compute number of rejected samples
@@ -248,7 +250,6 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, road
 
     # TODO: update collision occupancy based on proximity to existing colliding (for diversity as well)
     # TODO: minimize the maximum distance to colliding
-
     if not lazy:
         for vertex in vertices:
             roadmap.check_vertex(vertex, collision_fn)
@@ -303,6 +304,7 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None,
     # TODO: bias to stay near the (past/hypothetical) path
     # TODO: proximity pessimistic collision checking
     # TODO: roadmap reuse in general
+    # TODO: keep planning with increasing resolution
     start_time = time.time()
     if cost_fn is None:
         weights = default_weights(start, weights=weights)
@@ -320,7 +322,7 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None,
     best_path = None
     best_cost = max_cost
     for i, params in enumerate(param_sequence):
-        remaining_time = max_time - elapsed_time(start_time)
+        remaining_time = (max_time - elapsed_time(start_time))
         if remaining_time <= 0.:
             break
         if verbose:
@@ -332,7 +334,7 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None,
                             verbose=verbose, **params, **kwargs)[0]
         new_cost = compute_path_cost(new_path, cost_fn=cost_fn)
         if verbose:
-            print(is_path(new_path), new_cost, get_length(new_path))
+            print('Path: {} | Cost: {:.3f} | Length: {}'.format(is_path(new_path), new_cost, get_length(new_path)))
         if new_cost < best_cost:
             best_path = new_path
             best_cost = new_cost

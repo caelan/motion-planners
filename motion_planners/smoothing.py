@@ -41,7 +41,8 @@ def smooth_path_old(path, extend_fn, collision_fn, max_iterations=50, max_time=I
 
 ##################################################
 
-def smooth_path(path, extend_fn, collision_fn, distance_fn=None, max_iterations=50, max_time=INF, verbose=False):
+def smooth_path(path, extend_fn, collision_fn, distance_fn=None,
+                max_iterations=50, max_time=INF, converge_time=INF, verbose=False):
     """
     :param distance_fn: Distance function - distance_fn(q1, q2)->float
     :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
@@ -51,17 +52,20 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, max_iterations=
     :return: Path [q', ..., q"] or None if unable to find a solution
     """
     # TODO: makes an assumption on the distance_fn metric
+    # TODO: rename distance_fn to cost_fn
     # TODO: smooth until convergence
+    # TODO: sample other local waypoints
+    # TODO: dynamic expansion of the nearby graph
     if (path is None) or (max_iterations is None):
         return path
     assert (max_iterations < INF) or (max_time < INF)
-    start_time = time.time()
+    start_time = last_time = time.time()
     if distance_fn is None:
         distance_fn = get_distance
     waypoints = waypoints_from_path(path)
     for iteration in irange(max_iterations):
         #waypoints = waypoints_from_path(waypoints)
-        if (elapsed_time(start_time) > max_time) or (len(waypoints) <= 2):
+        if (elapsed_time(start_time) > max_time) or (elapsed_time(last_time) > converge_time) or (len(waypoints) <= 2):
             break
         # TODO: smoothing in the same linear segment when circular
 
@@ -70,8 +74,8 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, max_iterations=
         distances = [distance_fn(waypoints[i], waypoints[j]) for i, j in segments]
         total_distance = sum(distances)
         if verbose:
-            print('Iteration: {} | Waypoints: {} | Distance: {:.3f} | Time: {:.3f}'.format(
-                iteration, len(waypoints), total_distance, elapsed_time(start_time)))
+            print('Iteration: {} | Waypoints: {} | Distance: {:.3f} | Elapsed: {:.3f} | Remaining: {:.3f}'.format(
+                iteration, len(waypoints), total_distance, elapsed_time(start_time), max_time-elapsed_time(start_time)))
         probabilities = np.array(distances) / total_distance
 
         #segment1, segment2 = choices(segments, weights=probabilities, k=2)
@@ -88,10 +92,12 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, max_iterations=
         i, _ = segment1
         _, j = segment2
         new_waypoints = waypoints[:i+1] + [point1, point2] + waypoints[j:] # TODO: reuse computation
-        if compute_path_cost(new_waypoints, cost_fn=distance_fn) >= total_distance:
+        new_distance = compute_path_cost(new_waypoints, cost_fn=distance_fn)
+        if new_distance >= total_distance:
             continue
         if all(not collision_fn(q) for q in default_selector(extend_fn(point1, point2))):
             waypoints = new_waypoints
+            last_time = time.time() # TODO: cost must reduce above threshold
     #return waypoints
     return refine_waypoints(waypoints, extend_fn)
 

@@ -71,6 +71,7 @@ def time_discretize_curve(positions_curve, max_velocities=None,
 
 
 def derivative_discretize_curve(positions_curve, start_t=None, end_t=None, resolution=1e-2, time_step=1e-3, **kwargs):
+    # TODO: analytically discretize by finding first intersecting with distance
     d = positions_curve.c.shape[-1]
     resolutions = resolution*np.ones(d)
     start_t, end_t = get_interval(positions_curve, **kwargs)
