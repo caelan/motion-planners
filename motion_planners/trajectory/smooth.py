@@ -7,7 +7,7 @@ from .linear import find_lower_bound
 from .limits import check_spline
 from .discretize import time_discretize_curve
 from .parabolic import solve_multi_poly, solve_multivariate_ramp
-from .retime import EPSILON, trim, spline_duration, append_polys
+from .retime import EPSILON, trim, spline_duration, append_polys, get_interval
 from ..utils import INF, elapsed_time, get_pairs, find, default_selector
 
 
@@ -163,3 +163,37 @@ def smooth_curve(start_curve, v_max, a_max, curve_collision_fn,
         num, spline_duration(start_curve), spline_duration(curve), elapsed_time(start_time)))
     check_spline(curve, v_max, a_max)
     return curve
+
+##################################################
+
+DERIVATIVE_NAMES = [
+    'Position',
+    'Velocity',
+    'Acceleration',
+    'Jerk',
+]
+
+def plot_curve(positions_curve, derivative=1, dt=1e-2):
+    import matplotlib.pyplot as plt
+    # test_scores_mean, test_scores_std = estimate_gaussian(test_scores)
+    # width = scale * test_scores_std # standard deviation
+    # # TODO: standard error (confidence interval)
+    # # from learn_tools.active_learner import tail_confidence
+    # # alpha = 0.95
+    # # scale = tail_confidence(alpha)
+    # # width = scale * test_scores_std / np.sqrt(train_sizes)
+    # plt.fill_between(train_sizes, test_scores_mean - width, test_scores_mean + width, alpha=0.1)
+
+    start_t, end_t = get_interval(positions_curve, start_t=None, end_t=None)
+    times = np.append(np.arange(start_t, end_t, step=dt), [end_t])
+    curve = positions_curve.derivative(nu=derivative)
+    positions = [curve(t) for t in times]
+    plt.plot(times, positions) #, 'o-') #, label=name)
+    plt.xlabel('Time')
+    plt.ylabel(DERIVATIVE_NAMES[derivative])
+    ax = plt.subplot()
+    ax.autoscale(tight=True)
+    plt.legend(loc='best') # 'upper left'
+    plt.grid()
+    plt.show()
+    #return curve

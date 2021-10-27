@@ -219,7 +219,7 @@ def calculate_radius(d=2):
 ##################################################
 
 def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, roadmap=None, num_samples=100,
-             weights=None, p_norm=2, lazy=False, max_cost=INF, max_time=INF, w=1., verbose=True, **kwargs): #, max_paths=INF):
+             weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, w=1., verbose=True, **kwargs): #, max_paths=INF):
     """
     :param start: Start configuration - conf
     :param goal: End configuration - conf

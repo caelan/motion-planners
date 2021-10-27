@@ -5,8 +5,8 @@ from .limits import find_max_velocity, find_max_acceleration
 from ..utils import get_distance, INF
 
 
-V_MAX = 0.75*np.ones(2)
-A_MAX = (V_MAX - 0.) / (0.25 - 0.)
+V_MAX = 0.8*np.ones(2)
+A_MAX = abs(V_MAX - 0.) / abs(0.2 - 0.)
 #V_MAX = INF*np.ones(2)
 #A_MAX = 1e6*np.ones(2)
 

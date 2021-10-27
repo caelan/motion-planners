@@ -128,6 +128,8 @@ def sample_circle(circle):
 #################################################################
 
 def draw_shape(viewer, shape, **kwargs):
+    if viewer is None:
+        return
     if isinstance(shape, Box):
         return viewer.draw_rectangle(shape, **kwargs)
     if isinstance(shape, Circle):
@@ -146,7 +148,7 @@ def draw_environment(obstacles, regions, **kwargs):
     return viewer
 
 def add_segments(viewer, segments, step_size=INF, **kwargs):
-    if segments is None:
+    if (viewer is None) or (segments is None):
         return
     for line in segments:
         viewer.draw_line(line, **kwargs)
@@ -171,6 +173,8 @@ def spaced_colors(n, s=1, v=1):
     return [colorsys.hsv_to_rgb(h, s, v) for h in np.linspace(0, 1, n, endpoint=False)]
 
 def add_timed_path(viewer, times, path, **kwargs):
+    if viewer is None:
+        return
     # TODO: color based on velocity
     import colorsys
 
@@ -194,6 +198,8 @@ def draw_solution(segments, obstacles, regions):
     add_segments(viewer, segments)
 
 def add_roadmap(viewer, roadmap, **kwargs):
+    if viewer is None:
+        return
     for line in roadmap:
         viewer.draw_line(line, **kwargs)
 
@@ -202,5 +208,7 @@ def draw_roadmap(roadmap, obstacles, regions):
     add_roadmap(viewer, roadmap)
 
 def add_points(viewer, points, **kwargs):
+    if viewer is None:
+        return
     for sample in points:
         viewer.draw_point(sample, **kwargs)

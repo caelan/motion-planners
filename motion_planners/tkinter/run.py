@@ -248,8 +248,8 @@ def main():
             sample_fn, samples = wrap_sample_fn(get_sample_fn(environment, obstacles=[], use_halton=True)) # obstacles
             #extend_fn, roadmap = get_wrapped_extend_fn(environment, obstacles=obstacles)  # obstacles | []
 
-            #circular = {}
-            circular = {0: UNIT_LIMITS, 1: UNIT_LIMITS}
+            circular = {}
+            #circular = {0: UNIT_LIMITS, 1: UNIT_LIMITS}
             extend_fn, roadmap = get_extend_fn(circular=circular), []
 
             # points = list(extend_fn(start, goal))
@@ -261,7 +261,7 @@ def main():
             # TODO: shortcutting with this function
             #cost_fn = distance_fn
             #cost_fn = get_cost_fn(distance_fn, constant=1e-2, coefficient=1.)
-            cost_fn = get_duration_fn(v_max=V_MAX, a_max=A_MAX)
+            cost_fn = get_duration_fn(difference_fn=get_difference_fn(circular=circular), v_max=V_MAX, a_max=A_MAX)
             path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                          cost_fn=cost_fn, weights=weights, circular=circular,
                          max_time=args.time, max_iterations=INF, num_samples=100, # success_cost=0,
@@ -297,9 +297,11 @@ def main():
                 #path = path[:1] + path[-2:]
                 path = waypoints_from_path(path)
                 add_path(viewer, path, color='green')
-                if False:
+                if True:
                     #curve = interpolate_path(path) # , collision_fn=collision_fn)
-                    curve = retime_path(path, collision_fn=collision_fn, smooth=args.smooth) # , smooth=True)
+                    curve = retime_path(path, collision_fn=collision_fn, smooth=args.smooth,
+                                        max_time=args.time) # , smooth=True)
+
                     times, path = time_discretize_curve(curve)
                     times = [np.linalg.norm(curve(t, nu=1), ord=INF) for t in times]
                     #add_points(viewer, [curve(t) for t in curve.x])
@@ -310,7 +312,8 @@ def main():
                 for path in paths:
                     #extend_fn, roadmap = get_wrapped_extend_fn(environment, obstacles=obstacles)  # obstacles | []
                     #cost_fn = distance_fn
-                    smoothed = smooth_path(path, extend_fn, collision_fn, distance_fn=cost_fn, max_iterations=INF, max_time=args.time,
+                    smoothed = smooth_path(path, extend_fn, collision_fn, distance_fn=cost_fn,
+                                           max_iterations=INF, max_time=args.time,
                                            converge_time=INF, verbose=True)
                     print('Smoothed distance_fn: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
                     add_path(viewer, smoothed, color='red')
