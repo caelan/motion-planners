@@ -4,12 +4,11 @@ import numpy as np
 
 from .viewer import is_collision_free, contains, point_collides, sample_line, STEP_SIZE
 from ..utils import interval_generator, get_distance, wrap_interval, get_difference, \
-    circular_difference, UNIT_LIMITS, UNBOUNDED_LIMITS, INF
+    circular_difference, UNBOUNDED_LIMITS, INF
 
-def get_difference_fn(circular=[], **kwargs):
-    # TODO: custom circular intervals
+def get_difference_fn(circular={}):
     def fn(q2, q1):
-        return tuple(circular_difference(v2, v1, **kwargs) if (i in circular) else get_difference(v2, v1)
+        return tuple(circular_difference(v2, v1, interval=circular.get(i, UNBOUNDED_LIMITS))
                      for i, (v2, v1) in enumerate(zip(q2, q1)))
     return fn
 
@@ -111,7 +110,7 @@ def wrap_extend_fn(extend_fn):
     return new_extend_fn, roadmap
 
 
-def get_extend_fn(circular=[], step_size=STEP_SIZE, norm=INF):
+def get_extend_fn(circular={}, step_size=STEP_SIZE, norm=INF):
     #difference_fn = get_difference
     difference_fn = get_difference_fn(circular=circular)
     def fn(q1, q2):
@@ -122,8 +121,7 @@ def get_extend_fn(circular=[], step_size=STEP_SIZE, norm=INF):
         q = q1
         for i in range(num_steps):
             q = (1. / (num_steps - i)) * np.array(difference_fn(q2, q)) + q
-            q = [wrap_interval(v, UNIT_LIMITS if (i in circular) else UNBOUNDED_LIMITS)
-                 for i, v in enumerate(q)]
+            q = [wrap_interval(v, circular.get(i, UNBOUNDED_LIMITS)) for i, v in enumerate(q)]
             q = np.array(q) # tuple
             yield q
     return fn

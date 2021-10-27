@@ -32,7 +32,6 @@ BLUE = (0, 0, 1)
 
 Interval = namedtuple('Interval', ['lower', 'upper']) # AABB
 UNIT_LIMITS = Interval(0., 1.)
-#UNIT_LIMITS = Interval(-0.5, +0.5) # TODO: need to center
 CIRCULAR_LIMITS = Interval(-PI, PI)
 UNBOUNDED_LIMITS = Interval(-INF, INF)
 

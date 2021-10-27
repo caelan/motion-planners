@@ -219,7 +219,7 @@ def calculate_radius(d=2):
 ##################################################
 
 def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, roadmap=None, num_samples=100,
-             weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, w=1., verbose=True, **kwargs): #, max_paths=INF):
+             weights=None, p_norm=2, lazy=False, max_cost=INF, max_time=INF, w=1., verbose=True, **kwargs): #, max_paths=INF):
     """
     :param start: Start configuration - conf
     :param goal: End configuration - conf
@@ -302,7 +302,7 @@ def create_param_sequence(initial_samples=100, step_samples=100, **kwargs):
             for num_samples in irange(start=initial_samples, stop=INF, step=step_samples))
 
 def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, max_cost=INF, success_cost=INF,
-                  param_sequence=None, weights=None, circular=[], p_norm=2, max_time=INF, verbose=False, **kwargs):
+                  param_sequence=None, weights=None, circular={}, p_norm=2, max_time=INF, verbose=False, **kwargs):
     # TODO: bias to stay near the (past/hypothetical) path
     # TODO: proximity pessimistic collision checking
     # TODO: roadmap reuse in general

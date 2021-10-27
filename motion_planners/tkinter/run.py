@@ -16,7 +16,7 @@ from ..trajectory.retime import spline_duration
 from .viewer import create_box, draw_environment, add_points, \
     add_roadmap, get_box_center, add_path, create_cylinder, add_timed_path
 from ..utils import user_input, profiler, INF, compute_path_cost, elapsed_time, remove_redundant, \
-    waypoints_from_path, get_delta, get_distance
+    waypoints_from_path, get_delta, get_distance, UNIT_LIMITS
 from ..prm import prm
 from ..lazy_prm import lazy_prm, ROADMAPS
 from ..rrt_connect import rrt_connect, birrt
@@ -246,10 +246,10 @@ def main():
             start_time = time.time()
             collision_fn, colliding, cfree = wrap_collision_fn(get_collision_fn(environment, obstacles))
             sample_fn, samples = wrap_sample_fn(get_sample_fn(environment, obstacles=[], use_halton=True)) # obstacles
-            extend_fn, roadmap = get_wrapped_extend_fn(environment, obstacles=obstacles)  # obstacles | []
+            #extend_fn, roadmap = get_wrapped_extend_fn(environment, obstacles=obstacles)  # obstacles | []
 
-            circular = []
-            #circular = [0, 1]
+            #circular = {}
+            circular = {0: UNIT_LIMITS, 1: UNIT_LIMITS}
             extend_fn, roadmap = get_extend_fn(circular=circular), []
 
             # points = list(extend_fn(start, goal))
@@ -308,7 +308,7 @@ def main():
 
             if args.smooth:
                 for path in paths:
-                    extend_fn, roadmap = get_wrapped_extend_fn(environment, obstacles=obstacles)  # obstacles | []
+                    #extend_fn, roadmap = get_wrapped_extend_fn(environment, obstacles=obstacles)  # obstacles | []
                     #cost_fn = distance_fn
                     smoothed = smooth_path(path, extend_fn, collision_fn, distance_fn=cost_fn, max_iterations=INF, max_time=args.time,
                                            converge_time=INF, verbose=True)

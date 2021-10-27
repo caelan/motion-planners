@@ -1,12 +1,9 @@
 from scipy.spatial import KDTree
 from itertools import product
+from .utils import get_interval_extent, UNBOUNDED_LIMITS, INF
 
 import numpy as np
 import math
-
-NORMAL = [0]
-UNIT = [-1, 0, +1]
-CIRCULAR = [-2*math.pi, 0, +2*math.pi]
 
 
 class NearestNeighbors(object):
@@ -16,7 +13,7 @@ class NearestNeighbors(object):
     # https://github.com/lmcinnes/pynndescent
     # https://github.com/spotify/annoy
     # https://github.com/flann-lib/flann
-    def __init__(self, data=[], circular=[], embed_fn=lambda x: x, **kwargs): # [0, 1]
+    def __init__(self, data=[], circular={}, embed_fn=lambda x: x, **kwargs): # [0, 1]
         # TODO: maintain tree and brute-force list
         self.data = [] # TODO: self.kd_tree.data
         self.equivalent = []
@@ -32,7 +29,16 @@ class NearestNeighbors(object):
             index = len(self.data)
             indices.append(index)
             self.data.append(x)
-            domains = [UNIT if (k in self.circular) else NORMAL for k in range(len(x))]
+            domains = []
+            for k in range(len(x)):
+                interval = self.circular.get(k, UNBOUNDED_LIMITS)
+                extent = get_interval_extent(interval)
+                if extent != INF:
+                    domains.append([
+                        -extent, 0., +extent, # TODO: choose just one
+                    ])
+                else:
+                    domains.append([0.])
             for dx in product(*domains):
                 wx = x + np.array(dx)
                 self.equivalent.append(index)

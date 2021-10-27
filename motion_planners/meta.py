@@ -89,7 +89,7 @@ def solve_and_smooth(solve_fn, q1, q2, distance_fn, sample_fn, extend_fn, collis
 #################################################################
 
 def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorithm='birrt',
-          max_time=INF, max_iterations=INF, num_samples=100, smooth=None, weights=None, circular=[],
+          max_time=INF, max_iterations=INF, num_samples=100, smooth=None, weights=None, circular={},
           cost_fn=None, success_cost=INF, verbose=False, **kwargs):
     # TODO: better shared default options
     # TODO: allow distance_fn to be skipped
