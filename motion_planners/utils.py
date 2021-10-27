@@ -31,7 +31,8 @@ BLUE = (0, 0, 1)
 
 
 Interval = namedtuple('Interval', ['lower', 'upper']) # AABB
-UNIT_LIMITS = Interval(0., 1.)
+#UNIT_LIMITS = Interval(0., 1.)
+UNIT_LIMITS = Interval(-0.5, +0.5) # TODO: need to center
 CIRCULAR_LIMITS = Interval(-PI, PI)
 UNBOUNDED_LIMITS = Interval(-INF, INF)
 
@@ -274,7 +275,8 @@ def interval_generator(lower, upper, **kwargs):
     assert np.less_equal(lower, upper).all()
     if np.equal(lower, upper).all():
         return iter([lower])
-    return (convex_combination(lower, upper, w=weights) for weights in unit_generator(d=len(lower), **kwargs))
+    return (convex_combination(lower, upper, w=weights)
+            for weights in unit_generator(d=len(lower), **kwargs))
 
 ##################################################
 
@@ -353,7 +355,9 @@ def rescale_interval(value, old_interval=UNIT_LIMITS, new_interval=UNIT_LIMITS):
 
 def wrap_interval(value, interval=UNIT_LIMITS):
     lower, upper = interval
-    assert lower <= upper
+    if (lower == -INF) and (+INF == upper):
+        return value
+    assert -INF < lower <= upper < +INF
     return (value - lower) % (upper - lower) + lower
 
 

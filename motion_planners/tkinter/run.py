@@ -9,7 +9,7 @@ from ..meta import solve
 from ..trajectory.linear import solve_multi_linear, solve_linear, get_default_limits
 from ..trajectory.discretize import time_discretize_curve, V_MAX, A_MAX
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_wrapped_extend_fn, \
-    get_distance_fn, wrap_collision_fn, wrap_sample_fn
+    get_distance_fn, wrap_collision_fn, wrap_sample_fn, get_difference_fn
 from ..trajectory.smooth import smooth_curve, get_curve_collision_fn
 from ..trajectory.limits import analyze_continuity
 from ..trajectory.retime import spline_duration
@@ -246,14 +246,24 @@ def main():
             collision_fn, colliding, cfree = wrap_collision_fn(get_collision_fn(environment, obstacles))
             sample_fn, samples = wrap_sample_fn(get_sample_fn(environment, obstacles=[], use_halton=True)) # obstacles
             extend_fn, roadmap = get_wrapped_extend_fn(environment, obstacles=obstacles)  # obstacles | []
-            extend_fn, roadmap = get_extend_fn(), []
+
+            circular = []
+            #circular = [0, 1]
+            extend_fn, roadmap = get_extend_fn(difference_fn=get_difference_fn(circular=circular)), []
+
+            # points = list(extend_fn(start, goal))
+            # print(points)
+            # add_points(viewer, points, color='blue', radius=2)
+            # input()
+            # return
 
             # TODO: shortcutting with this function
             #cost_fn = distance_fn
             #cost_fn = get_cost_fn(distance_fn, constant=1e-2, coefficient=1.)
             cost_fn = get_duration_fn(v_max=V_MAX, a_max=A_MAX)
-            path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, cost_fn=cost_fn, weights=weights,
-                         max_time=args.time, max_iterations=INF, num_samples=50, # success_cost=0,
+            path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
+                         cost_fn=cost_fn, weights=weights, circular=circular,
+                         max_time=args.time, max_iterations=INF, num_samples=100, # success_cost=0,
                          restarts=2, smooth=0, algorithm=args.algorithm, verbose=True)
             #print(ROADMAPS)
 

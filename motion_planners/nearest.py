@@ -4,8 +4,9 @@ from itertools import product
 import numpy as np
 import math
 
-UNIT = (-1, 0, +1)
-CIRCULAR = (-2*math.pi, 0, +2*math.pi)
+NORMAL = [0]
+UNIT = [-1, 0, +1]
+CIRCULAR = [-2*math.pi, 0, +2*math.pi]
 
 
 class NearestNeighbors(object):
@@ -15,7 +16,7 @@ class NearestNeighbors(object):
     # https://github.com/lmcinnes/pynndescent
     # https://github.com/spotify/annoy
     # https://github.com/flann-lib/flann
-    def __init__(self, data=[], circular=[0, 1], embed_fn=lambda x: x, **kwargs):
+    def __init__(self, data=[], circular=[], embed_fn=lambda x: x, **kwargs): # [0, 1]
         # TODO: maintain tree and brute-force list
         self.data = [] # TODO: self.kd_tree.data
         self.equivalent = []
@@ -31,19 +32,16 @@ class NearestNeighbors(object):
             index = len(self.data)
             indices.append(index)
             self.data.append(x)
-            for combo in product(UNIT, repeat=len(self.circular)):
-                dx = np.zeros(len(x))
-                for i, v in zip(self.circular, combo):
-                    dx[i] = v
-                wx = x + dx
+            domains = [UNIT if (k in self.circular) else NORMAL for k in range(len(x))]
+            for dx in product(*domains):
+                wx = x + np.array(dx)
                 self.equivalent.append(index)
                 self.embedded.append(self.embed_fn(wx))
 
         if self.embedded:
             self.kd_tree = KDTree(self.embedded,
                                   #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None
-                                  **self.kwargs,
-                                  )
+                                  **self.kwargs)
         return zip(indices, new_data)
     def query_neighbors(self, x, **kwargs):
         # TODO: class **kwargs
