@@ -2,10 +2,18 @@ import math
 
 import numpy as np
 
-from .viewer import is_collision_free, contains, point_collides, sample_line
-from ..utils import interval_generator, get_distance, get_delta
+from .viewer import is_collision_free, contains, point_collides, sample_line, STEP_SIZE
+from ..utils import interval_generator, get_distance, wrap_interval, get_difference, UNIT_LIMITS
 
-def get_distance_fn(weights, difference_fn=get_delta):
+def get_difference_fn(circular=[], interval=UNIT_LIMITS):
+    # TODO: custom circular intervals
+    def fn(q2, q1):
+        return tuple(wrap_interval(v2 - v1, interval=interval) if (i in circular) else get_difference(v2, v1)
+                     for i, (v2, v1) in enumerate(zip(q2, q1)))
+    return fn
+
+
+def get_distance_fn(weights, difference_fn=get_difference):
     # TODO: careful with circular joints
     def fn(q1, q2):
         diff = np.array(difference_fn(q2, q1))
@@ -102,13 +110,28 @@ def wrap_extend_fn(extend_fn):
     return new_extend_fn, roadmap
 
 
-def get_extend_fn(environment, obstacles=[]):
+def get_extend_fn(difference_fn=get_difference, step_size=STEP_SIZE, norm=2):
+    def fn(q1, q2):
+        # steps = int(np.max(np.abs(np.divide(difference_fn(q2, q1), resolutions))))
+        # steps = int(np.linalg.norm(np.divide(difference_fn(q2, q1), resolutions), ord=norm))
+        steps = int(np.linalg.norm(difference_fn(q2, q1) / step_size, ord=norm))
+        num_steps = steps + 1
+        q = q1
+        for i in range(num_steps):
+            positions = (1. / (num_steps - i)) * np.array(difference_fn(q2, q)) + q
+            q = tuple(positions)
+            #q = tuple(wrap_positions(body, joints, positions))
+            yield q
+    return fn
+
+
+def get_wrapped_extend_fn(environment, obstacles=[], **kwargs):
     collision_fn = get_collision_fn(environment, obstacles)
     roadmap = []
 
     def extend_fn(q1, q2):
         path = [q1]
-        for q in sample_line(segment=(q1, q2)):
+        for q in sample_line(segment=(q1, q2), **kwargs):
             yield q
             if collision_fn(q):
                 path = None

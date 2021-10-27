@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..utils import INF, get_pairs, find
+from ..utils import INF, get_pairs, find, Interval
 
 
 EPSILON = 1e-6
@@ -97,7 +97,7 @@ def get_interval(curve, start_t=None, end_t=None):
     start_t = max(start_t, spline_start(curve))
     end_t = min(end_t, spline_end(curve))
     assert start_t < end_t
-    return start_t, end_t
+    return Interval(start_t, end_t)
 
 
 def poly_from_spline(spline, i, d):

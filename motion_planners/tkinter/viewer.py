@@ -96,8 +96,8 @@ def sample_line(segment, step_size=STEP_SIZE):
         yield tuple(np.array(q1) + l * diff / dist)
     yield q2
 
-def line_collides(line, obst, **kwargs):  # TODO - could also compute this exactly
-    return any(point_collides(point, obstacles=[obst], **kwargs) for point in sample_line(line))
+def line_collides(line, obst, step_size=STEP_SIZE, **kwargs):  # TODO - could also compute this exactly
+    return any(point_collides(point, obstacles=[obst], **kwargs) for point in sample_line(line, step_size=step_size))
 
 def is_collision_free(line, obstacles, **kwargs):
     return not any(line_collides(line, obst, **kwargs) for obst in obstacles)

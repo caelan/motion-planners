@@ -8,7 +8,8 @@ import random
 from ..meta import solve
 from ..trajectory.linear import solve_multi_linear, solve_linear, get_default_limits
 from ..trajectory.discretize import time_discretize_curve, V_MAX, A_MAX
-from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn, wrap_collision_fn, wrap_sample_fn
+from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_wrapped_extend_fn, \
+    get_distance_fn, wrap_collision_fn, wrap_sample_fn
 from ..trajectory.smooth import smooth_curve, get_curve_collision_fn
 from ..trajectory.limits import analyze_continuity
 from ..trajectory.retime import spline_duration
@@ -244,7 +245,8 @@ def main():
             start_time = time.time()
             collision_fn, colliding, cfree = wrap_collision_fn(get_collision_fn(environment, obstacles))
             sample_fn, samples = wrap_sample_fn(get_sample_fn(environment, obstacles=[], use_halton=True)) # obstacles
-            extend_fn, roadmap = get_extend_fn(environment, obstacles=obstacles)  # obstacles | []
+            extend_fn, roadmap = get_wrapped_extend_fn(environment, obstacles=obstacles)  # obstacles | []
+            extend_fn, roadmap = get_extend_fn(), []
 
             # TODO: shortcutting with this function
             #cost_fn = distance_fn
@@ -295,7 +297,7 @@ def main():
 
             if args.smooth:
                 for path in paths:
-                    extend_fn, roadmap = get_extend_fn(environment, obstacles=obstacles)  # obstacles | []
+                    extend_fn, roadmap = get_wrapped_extend_fn(environment, obstacles=obstacles)  # obstacles | []
                     #cost_fn = distance_fn
                     smoothed = smooth_path(path, extend_fn, collision_fn, distance_fn=cost_fn, max_iterations=INF, max_time=args.time,
                                            converge_time=INF, verbose=True)

@@ -1,6 +1,6 @@
 from random import shuffle
 from itertools import islice
-from collections import deque, defaultdict
+from collections import deque, defaultdict, namedtuple
 import time
 import contextlib
 import pstats
@@ -10,7 +10,10 @@ import random
 import numpy as np
 
 INF = float('inf')
+PI = np.pi
 
+
+# TODO: deprecate these defaults
 RRT_ITERATIONS = 20
 RRT_RESTARTS = 2
 RRT_SMOOTHING = 20
@@ -25,6 +28,12 @@ except NameError:
 RED = (1, 0, 0)
 GREEN = (0, 1, 0)
 BLUE = (0, 0, 1)
+
+
+Interval = namedtuple('Interval', ['lower', 'upper']) # AABB
+UNIT_LIMITS = Interval(0., 1.)
+CIRCULAR_LIMITS = Interval(-PI, PI)
+UNBOUNDED_LIMITS = Interval(-INF, INF)
 
 
 def apply_alpha(color, alpha=1.):
@@ -327,3 +336,46 @@ def adjacent_from_edges(edges):
         undirected_edges[v1].add(v2)
         undirected_edges[v2].add(v1)
     return undirected_edges
+
+##################################################
+
+def normalize_interval(value, interval=UNIT_LIMITS):
+    # TODO: move more out of pybullet-planning
+    lower, upper = interval
+    assert lower <= upper
+    return (value - lower) / (upper - lower)
+
+
+def rescale_interval(value, old_interval=UNIT_LIMITS, new_interval=UNIT_LIMITS):
+    lower, upper = new_interval
+    return convex_combination(lower, upper, w=normalize_interval(value, old_interval))
+
+
+def wrap_interval(value, interval=UNIT_LIMITS):
+    lower, upper = interval
+    assert lower <= upper
+    return (value - lower) % (upper - lower) + lower
+
+
+def interval_distance(value1, value2, interval=UNIT_LIMITS):
+    value1 = wrap_interval(value1, interval)
+    value2 = wrap_interval(value2, interval)
+    if value1 > value2:
+        value1, value2 = value2, value1
+    lower, upper = interval
+    return min(value2 - value1, (value1 - lower) + (upper - value2))
+
+
+##################################################
+
+
+def circular_interval(lower=-PI): # [-np.pi, np.pi)
+    return Interval(lower, lower + 2*PI)
+
+
+def wrap_angle(theta, **kwargs):
+    return wrap_interval(theta, interval=circular_interval(**kwargs))
+
+
+def circular_difference(theta2, theta1, **kwargs):
+    return wrap_angle(theta2 - theta1, **kwargs)
