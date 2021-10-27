@@ -3,8 +3,21 @@ from itertools import product
 from .utils import get_interval_extent, UNBOUNDED_LIMITS, INF
 
 import numpy as np
-import math
 
+def expand_circular(x, circular={}):
+    domains = []
+    for k in range(len(x)):
+        interval = circular.get(k, UNBOUNDED_LIMITS)
+        extent = get_interval_extent(interval)
+        if extent != INF:
+            domains.append([
+                -extent, 0., +extent, # TODO: choose just one
+            ])
+        else:
+            domains.append([0.])
+    for dx in product(*domains):
+        wx = x + np.array(dx)
+        yield wx
 
 class NearestNeighbors(object):
     # https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html
@@ -29,21 +42,9 @@ class NearestNeighbors(object):
             index = len(self.data)
             indices.append(index)
             self.data.append(x)
-            domains = []
-            for k in range(len(x)):
-                interval = self.circular.get(k, UNBOUNDED_LIMITS)
-                extent = get_interval_extent(interval)
-                if extent != INF:
-                    domains.append([
-                        -extent, 0., +extent, # TODO: choose just one
-                    ])
-                else:
-                    domains.append([0.])
-            for dx in product(*domains):
-                wx = x + np.array(dx)
+            for wx in expand_circular(x, circular=self.circular):
                 self.equivalent.append(index)
                 self.embedded.append(self.embed_fn(wx))
-
         if self.embedded:
             self.kd_tree = KDTree(self.embedded,
                                   #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None
