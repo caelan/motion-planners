@@ -9,7 +9,7 @@ import numpy as np
 
 from collections import namedtuple
 
-from ..utils import get_pairs, get_delta, INF
+from ..utils import get_pairs, get_delta, INF, get_interval_center, get_interval_extent
 
 Box = namedtuple('Box', ['lower', 'upper'])
 Circle = namedtuple('Circle', ['center', 'radius'])
@@ -63,7 +63,7 @@ class PRMViewer(object):
 
 #################################################################
 
-STEP_SIZE = 1.5e-2
+STEP_SIZE = 1e-2
 MIN_PROXIMITY = 1e-3
 
 def contains_box(point, box, buffer=0.):
@@ -112,13 +112,8 @@ def create_box(center, extents):
 def create_cylinder(center, radius):
     return Circle(center, radius)
 
-def get_box_center(box):
-    lower, upper = box
-    return np.average([lower, upper], axis=0)
-
-def get_box_extent(box):
-    lower, upper = box
-    return get_delta(lower, upper)
+get_box_center = get_interval_center
+get_box_extent = get_interval_extent
 
 def sample_box(box):
     (lower, upper) = box

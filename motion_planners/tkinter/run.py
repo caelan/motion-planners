@@ -142,7 +142,8 @@ def problem1():
         'env': create_box(center=(.5, .5), extents=(1., 1.)),
         'green': create_box(center=(.8, .8), extents=(.1, .1)),
     }
-    start = np.array([0., 0.])
+    #start = np.array([0., 0.])
+    start = np.array([0.1, 0.1])
     goal = 'green'
 
     return start, goal, regions, obstacles
@@ -249,7 +250,7 @@ def main():
 
             circular = []
             #circular = [0, 1]
-            extend_fn, roadmap = get_extend_fn(difference_fn=get_difference_fn(circular=circular)), []
+            extend_fn, roadmap = get_extend_fn(circular=circular), []
 
             # points = list(extend_fn(start, goal))
             # print(points)

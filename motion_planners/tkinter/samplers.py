@@ -3,12 +3,13 @@ import math
 import numpy as np
 
 from .viewer import is_collision_free, contains, point_collides, sample_line, STEP_SIZE
-from ..utils import interval_generator, get_distance, wrap_interval, get_difference, UNIT_LIMITS, UNBOUNDED_LIMITS
+from ..utils import interval_generator, get_distance, wrap_interval, get_difference, \
+    circular_difference, UNIT_LIMITS, UNBOUNDED_LIMITS, INF
 
 def get_difference_fn(circular=[], **kwargs):
     # TODO: custom circular intervals
     def fn(q2, q1):
-        return tuple(wrap_interval(v2 - v1, **kwargs) if (i in circular) else get_difference(v2, v1)
+        return tuple(circular_difference(v2, v1, **kwargs) if (i in circular) else get_difference(v2, v1)
                      for i, (v2, v1) in enumerate(zip(q2, q1)))
     return fn
 
@@ -110,19 +111,20 @@ def wrap_extend_fn(extend_fn):
     return new_extend_fn, roadmap
 
 
-def get_extend_fn(circular=[], difference_fn=get_difference, step_size=STEP_SIZE, norm=2):
+def get_extend_fn(circular=[], step_size=STEP_SIZE, norm=INF):
+    #difference_fn = get_difference
+    difference_fn = get_difference_fn(circular=circular)
     def fn(q1, q2):
         # steps = int(np.max(np.abs(np.divide(difference_fn(q2, q1), resolutions))))
         # steps = int(np.linalg.norm(np.divide(difference_fn(q2, q1), resolutions), ord=norm))
         steps = int(np.linalg.norm(np.array(difference_fn(q2, q1)) / step_size, ord=norm))
         num_steps = steps + 1
         q = q1
-        #print(difference_fn(q2, q1))
         for i in range(num_steps):
-            positions = (1. / (num_steps - i)) * np.array(difference_fn(q2, q)) + q
-            #positions = [wrap_interval(v, UNIT_LIMITS if (i in circular) else UNBOUNDED_LIMITS)
-            #             for i, v in enumerate(positions)]
-            q = tuple(positions)
+            q = (1. / (num_steps - i)) * np.array(difference_fn(q2, q)) + q
+            q = [wrap_interval(v, UNIT_LIMITS if (i in circular) else UNBOUNDED_LIMITS)
+                 for i, v in enumerate(q)]
+            q = np.array(q) # tuple
             yield q
     return fn
 

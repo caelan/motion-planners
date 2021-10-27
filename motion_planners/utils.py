@@ -31,11 +31,12 @@ BLUE = (0, 0, 1)
 
 
 Interval = namedtuple('Interval', ['lower', 'upper']) # AABB
-#UNIT_LIMITS = Interval(0., 1.)
-UNIT_LIMITS = Interval(-0.5, +0.5) # TODO: need to center
+UNIT_LIMITS = Interval(0., 1.)
+#UNIT_LIMITS = Interval(-0.5, +0.5) # TODO: need to center
 CIRCULAR_LIMITS = Interval(-PI, PI)
 UNBOUNDED_LIMITS = Interval(-INF, INF)
 
+##################################################
 
 def apply_alpha(color, alpha=1.):
    return tuple(color[:3]) + (alpha,)
@@ -370,16 +371,18 @@ def interval_distance(value1, value2, interval=UNIT_LIMITS):
     return min(value2 - value1, (value1 - lower) + (upper - value2))
 
 
+def circular_difference(theta2, theta1, interval=UNIT_LIMITS):
+    extent = get_interval_extent(interval)
+    diff_interval = Interval(-extent/2, +extent/2)
+    return wrap_interval(theta2 - theta1, interval=diff_interval)
+
 ##################################################
 
-
-def circular_interval(lower=-PI): # [-np.pi, np.pi)
-    return Interval(lower, lower + 2*PI)
-
-
-def wrap_angle(theta, **kwargs):
-    return wrap_interval(theta, interval=circular_interval(**kwargs))
+def get_interval_center(interval):
+    lower, upper = interval
+    return np.average([lower, upper], axis=0)
 
 
-def circular_difference(theta2, theta1, **kwargs):
-    return wrap_angle(theta2 - theta1, **kwargs)
+def get_interval_extent(interval):
+    lower, upper = interval
+    return get_delta(lower, upper)
