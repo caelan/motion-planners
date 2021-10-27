@@ -29,7 +29,6 @@ class NearestNeighbors(object):
     def __init__(self, data=[], circular={}, embed_fn=lambda x: x, **kwargs): # [0, 1]
         # TODO: maintain tree and brute-force list
         self.data = [] # TODO: self.kd_tree.data
-        self.equivalent = []
         self.embedded = []
         self.kd_tree = None
         self.circular = circular
@@ -42,19 +41,21 @@ class NearestNeighbors(object):
             index = len(self.data)
             indices.append(index)
             self.data.append(x)
-            for wx in expand_circular(x, circular=self.circular):
-                self.equivalent.append(index)
-                self.embedded.append(self.embed_fn(wx))
+            self.embedded.append(self.embed_fn(x))
         if self.embedded:
             self.kd_tree = KDTree(self.embedded,
                                   #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None
                                   **self.kwargs)
         return zip(indices, new_data)
-    def query_neighbors(self, x, **kwargs):
+    def query_neighbors(self, x, k=1, **kwargs):
         # TODO: class **kwargs
-        embedded = self.embed_fn(x)
-        #print(x, embedded)
-        # k=1, eps=0, p=2, distance_upper_bound=inf, workers=1
-        distances, indices = self.kd_tree.query(embedded, **kwargs)
-        return [(d, self.equivalent[i], self.data[self.equivalent[i]])
-                for d, i in zip(distances, indices)] # TODO: filter
+        closest_neighbors = {}
+        for wx in expand_circular(x, circular=self.circular):
+            embedded = self.embed_fn(wx)
+            #print(x, embedded)
+            # k=1, eps=0, p=2, distance_upper_bound=inf, workers=1
+            for d, i in zip(*self.kd_tree.query(embedded, k=k, **kwargs)):
+                if d < closest_neighbors.get(i, INF):
+                    closest_neighbors[i] = d
+        return [(d, i, self.data[i]) for i, d in sorted(
+            closest_neighbors.items(), key=lambda pair: pair[1])][:k] # TODO: filter
