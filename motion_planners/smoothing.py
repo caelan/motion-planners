@@ -63,6 +63,7 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None,
     if distance_fn is None:
         distance_fn = get_distance
     waypoints = waypoints_from_path(path)
+    #distance = compute_path_cost(waypoints, cost_fn=distance_fn)
     for iteration in irange(max_iterations):
         #waypoints = waypoints_from_path(waypoints)
         if (elapsed_time(start_time) > max_time) or (elapsed_time(last_time) > converge_time) or (len(waypoints) <= 2):
@@ -73,10 +74,10 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None,
         segments = list(get_pairs(indices))
         distances = [distance_fn(waypoints[i], waypoints[j]) for i, j in segments]
         total_distance = sum(distances)
+        probabilities = np.array(distances) / total_distance
         if verbose:
             print('Iteration: {} | Waypoints: {} | Distance: {:.3f} | Elapsed: {:.3f} | Remaining: {:.3f}'.format(
                 iteration, len(waypoints), total_distance, elapsed_time(start_time), max_time-elapsed_time(start_time)))
-        probabilities = np.array(distances) / total_distance
 
         #segment1, segment2 = choices(segments, weights=probabilities, k=2)
         seg_indices = list(range(len(segments)))

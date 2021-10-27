@@ -154,6 +154,10 @@ def get_delta(q1, q2):
     return np.array(q2) - np.array(q1)
 
 
+def get_difference(q2, q1):
+    return get_delta(q1, q2)
+
+
 def get_distance(q1, q2):
     return np.linalg.norm(get_delta(q1, q2))
 
@@ -172,6 +176,7 @@ def is_path(path):
 def compute_path_cost(path, cost_fn=get_distance):
     if not is_path(path):
         return INF
+    #path = waypoints_from_path(path)
     return sum(cost_fn(*pair) for pair in get_pairs(path))
 
 
@@ -179,10 +184,6 @@ def get_length(path):
     if not is_path(path):
         return INF
     return len(path)
-
-
-def get_difference(q2, q1):
-    return np.array(q2) - np.array(q1)
 
 
 def remove_redundant(path, tolerance=1e-3):

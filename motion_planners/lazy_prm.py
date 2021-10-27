@@ -165,6 +165,11 @@ class Roadmap(object):
             if not self.check_edge(v1, v2, collision_fn, extend_fn):
                 return False
         return True
+    def check_roadmap(self, collision_fn, extend_fn):
+        for vertex in self.vertices:
+            self.check_vertex(vertex, collision_fn)
+        for vertex1, vertex2 in self.edges:
+            self.check_edge(vertex1, vertex2, collision_fn, extend_fn) # TODO: cache extend_fn
     def get_cost(self, v1, v2):
         edge = (v1, v2)
         if edge not in self.edge_costs:
@@ -251,10 +256,7 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, road
     # TODO: update collision occupancy based on proximity to existing colliding (for diversity as well)
     # TODO: minimize the maximum distance to colliding
     if not lazy:
-        for vertex in vertices:
-            roadmap.check_vertex(vertex, collision_fn)
-        for vertex1, vertex2 in edges:
-            roadmap.check_edge(vertex1, vertex2, collision_fn, extend_fn)
+        roadmap.check_roadmap(collision_fn, extend_fn)
 
     weight_fn = roadmap.get_cost
     #weight_fn = lambda v1, v2: cost_fn(samples[v1], samples[v2])

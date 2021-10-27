@@ -39,9 +39,6 @@ ALGORITHMS = [
 ##################################################
 
 def get_cost_fn(distance_fn=get_distance, constant=0., coefficient=1.):
-    # TODO: bounding boxes for the links that are moving
-    # TODO: surface area hands stuff
-
     def fn(q1, q2):
         return constant + coefficient*distance_fn(q1, q2)
     return fn
@@ -235,6 +232,7 @@ def main():
     #########################
 
     #connected_test, roadmap = get_connected_test(obstacles)
+    weights = np.reciprocal(V_MAX)
     distance_fn = get_distance_fn(weights=[1, 1]) # distance_fn
     min_distance = distance_fn(start, goal)
     print('Distance: {:.3f}'.format(min_distance))
@@ -252,7 +250,7 @@ def main():
             #cost_fn = distance_fn
             #cost_fn = get_cost_fn(distance_fn, constant=1e-2, coefficient=1.)
             cost_fn = get_duration_fn(v_max=V_MAX, a_max=A_MAX)
-            path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, cost_fn=cost_fn,
+            path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, cost_fn=cost_fn, weights=weights,
                          max_time=args.time, max_iterations=INF, num_samples=50, # success_cost=0,
                          restarts=2, smooth=0, algorithm=args.algorithm, verbose=True)
             #print(ROADMAPS)
@@ -300,7 +298,7 @@ def main():
                     extend_fn, roadmap = get_extend_fn(environment, obstacles=obstacles)  # obstacles | []
                     #cost_fn = distance_fn
                     smoothed = smooth_path(path, extend_fn, collision_fn, distance_fn=cost_fn, max_iterations=INF, max_time=args.time,
-                                           converge_time=1e-1, verbose=True)
+                                           converge_time=INF, verbose=True)
                     print('Smoothed distance_fn: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
                     add_path(viewer, smoothed, color='red')
     user_input('Finish?')
