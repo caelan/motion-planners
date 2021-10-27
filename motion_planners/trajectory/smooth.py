@@ -173,7 +173,7 @@ DERIVATIVE_NAMES = [
     'Jerk',
 ]
 
-def plot_curve(positions_curve, derivative=1, dt=1e-2):
+def plot_curve(positions_curve, derivative=0, dt=1e-3):
     import matplotlib.pyplot as plt
     # test_scores_mean, test_scores_std = estimate_gaussian(test_scores)
     # width = scale * test_scores_std # standard deviation
@@ -184,11 +184,16 @@ def plot_curve(positions_curve, derivative=1, dt=1e-2):
     # # width = scale * test_scores_std / np.sqrt(train_sizes)
     # plt.fill_between(train_sizes, test_scores_mean - width, test_scores_mean + width, alpha=0.1)
 
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] # Default color order
     start_t, end_t = get_interval(positions_curve, start_t=None, end_t=None)
-    times = np.append(np.arange(start_t, end_t, step=dt), [end_t])
     curve = positions_curve.derivative(nu=derivative)
-    positions = [curve(t) for t in times]
-    plt.plot(times, positions) #, 'o-') #, label=name)
+    times = np.append(np.arange(start_t, end_t, step=dt), [end_t])
+    for i, coords in enumerate(zip(*[curve(t) for t in times])):
+        plt.plot(times, coords, color=colors[i], label='x[{}]'.format(i)) #, marker='o-')
+    times = np.append(np.arange(start_t, end_t, step=5e1*dt), [end_t])
+    for i, coords in enumerate(zip(*[curve(t) for t in times])):
+        plt.plot(times, coords, color=colors[i], label='x[{}]'.format(i), marker='x') # o | + | x
+
     plt.xlabel('Time')
     plt.ylabel(DERIVATIVE_NAMES[derivative])
     ax = plt.subplot()

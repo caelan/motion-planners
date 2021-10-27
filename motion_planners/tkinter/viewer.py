@@ -4,8 +4,10 @@ try:
 except ModuleNotFoundError:
     from tkinter import Tk, Canvas, Toplevel, LAST
     #import tkinter as tk
+from _tkinter import TclError
 
 import numpy as np
+import traceback
 
 from collections import namedtuple
 
@@ -16,6 +18,7 @@ Circle = namedtuple('Circle', ['center', 'radius'])
 
 class PRMViewer(object):
     def __init__(self, width=500, height=500, title='PRM', background='tan'):
+        # TODO: matplotlib viewer
         tk = Tk()
         tk.withdraw()
         top = Toplevel(tk)
@@ -138,7 +141,12 @@ def draw_shape(viewer, shape, **kwargs):
     raise NotImplementedError(shape)
 
 def draw_environment(obstacles, regions, **kwargs):
-    viewer = PRMViewer(**kwargs)
+    try:
+        viewer = PRMViewer(**kwargs)
+    except TclError:
+        traceback.print_exc()
+        return None
+
     for obstacle in obstacles:
         draw_shape(viewer, obstacle, color='brown')
     for name, region in regions.items():

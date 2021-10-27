@@ -10,7 +10,7 @@ from ..trajectory.linear import solve_multi_linear, solve_linear, get_default_li
 from ..trajectory.discretize import time_discretize_curve, V_MAX, A_MAX
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_wrapped_extend_fn, \
     get_distance_fn, wrap_collision_fn, wrap_sample_fn, get_difference_fn
-from ..trajectory.smooth import smooth_curve, get_curve_collision_fn
+from ..trajectory.smooth import smooth_curve, get_curve_collision_fn, plot_curve
 from ..trajectory.limits import analyze_continuity
 from ..trajectory.retime import spline_duration
 from .viewer import create_box, draw_environment, add_points, \
@@ -182,7 +182,7 @@ def solve_lazy_prm(viewer, start, goal, sample_fn, extend_fn, collision_fn, radi
 ##################################################
 
 
-def main():
+def main(draw=False):
     """
     Creates and solves the 2D motion planning problem.
     """
@@ -206,7 +206,6 @@ def main():
                         help='The random seed to use.')
     args = parser.parse_args()
     print(args)
-    # TODO: matplotlib viewer
 
     seed = args.seed
     if seed is None:
@@ -229,7 +228,10 @@ def main():
     title = args.algorithm
     if args.smooth:
         title += '+shortcut'
-    viewer = draw_environment(obstacles, regions, title=title)
+
+    viewer = None # TODO: can't use matplotlib at the same time
+    if draw:
+        viewer = draw_environment(obstacles, regions, title=title)
 
     #########################
 
@@ -301,6 +303,8 @@ def main():
                     #curve = interpolate_path(path) # , collision_fn=collision_fn)
                     curve = retime_path(path, collision_fn=collision_fn, smooth=args.smooth,
                                         max_time=args.time) # , smooth=True)
+                    if not draw:
+                        plot_curve(curve)
 
                     times, path = time_discretize_curve(curve)
                     times = [np.linalg.norm(curve(t, nu=1), ord=INF) for t in times]
@@ -317,6 +321,7 @@ def main():
                                            converge_time=INF, verbose=True)
                     print('Smoothed distance_fn: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))
                     add_path(viewer, smoothed, color='red')
+
     user_input('Finish?')
 
 if __name__ == '__main__':
