@@ -54,6 +54,10 @@ def negate(test):
     return lambda *args, **kwargs: not test(*args, **kwargs)
 
 
+def clip(value, min_value=-INF, max_value=+INF):
+    return min(max(min_value, value), max_value)
+
+
 def argmin(function, sequence):
     # TODO: use min
     values = list(sequence)

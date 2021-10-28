@@ -7,7 +7,7 @@ import random
 
 from ..meta import solve
 from ..trajectory.linear import solve_multi_linear, solve_linear, get_default_limits
-from ..trajectory.discretize import time_discretize_curve, V_MAX, A_MAX
+from ..trajectory.discretize import time_discretize_curve, distance_discretize_curve, V_MAX, A_MAX
 from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_wrapped_extend_fn, \
     get_distance_fn, wrap_collision_fn, wrap_sample_fn, get_difference_fn
 from ..trajectory.smooth import smooth_curve, get_curve_collision_fn, plot_curve
@@ -71,7 +71,7 @@ def dump_spline(positions_curve):
         print(d, positions_curve.c[..., d])
 
 def retime_path(path, collision_fn=lambda q: False, smooth=False, **kwargs):
-    d = len(path[0])
+    # d = len(path[0])
     # v_max = 5.*np.ones(d)
     # a_max = v_max / 1.
     v_max, a_max = V_MAX, A_MAX
@@ -299,6 +299,7 @@ def main(draw=False):
                 #path = path[:1] + path[-2:]
                 path = waypoints_from_path(path)
                 add_path(viewer, path, color='green')
+
                 if True:
                     #curve = interpolate_path(path) # , collision_fn=collision_fn)
                     curve = retime_path(path, collision_fn=collision_fn, smooth=args.smooth,
@@ -306,13 +307,13 @@ def main(draw=False):
                     if not draw:
                         plot_curve(curve)
 
-                    times, path = time_discretize_curve(curve)
+                    times, path = distance_discretize_curve(curve)
                     times = [np.linalg.norm(curve(t, nu=1), ord=INF) for t in times]
                     #add_points(viewer, [curve(t) for t in curve.x])
                     #add_path(viewer, path, color='red')
                     add_timed_path(viewer, times, path) # TODO: add curve
 
-            if args.smooth:
+            if False and args.smooth:
                 for path in paths:
                     #extend_fn, roadmap = get_wrapped_extend_fn(environment, obstacles=obstacles)  # obstacles | []
                     #cost_fn = distance_fn

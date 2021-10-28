@@ -5,7 +5,7 @@ import numpy as np
 
 from .linear import find_lower_bound
 from .limits import check_spline, find_extrema
-from .discretize import time_discretize_curve
+from .discretize import time_discretize_curve, derivative_discretize_curve, distance_discretize_curve
 from .parabolic import solve_multi_poly, solve_multivariate_ramp
 from .retime import EPSILON, trim, spline_duration, append_polys, get_interval
 from ..utils import INF, elapsed_time, get_pairs, find, default_selector
@@ -22,10 +22,11 @@ def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, ma
         #                     #start_t=t0, end_t=t1,
         #                     ):
         #     return True
-        _, samples = time_discretize_curve(curve, verbose=False,
-                                           start_t=t0, end_t=t1,
-                                           #max_velocities=v_max,
-                                           )
+        # _, samples = time_discretize_curve(curve, verbose=False,
+        #                                    start_t=t0, end_t=t1,
+        #                                    #max_velocities=v_max,
+        #                                    )
+        _, samples = distance_discretize_curve(curve, start_t=t0, end_t=t1)
         if any(map(collision_fn, default_selector(samples))):
            return True
         return False
@@ -185,19 +186,27 @@ def plot_curve(positions_curve, derivative=0, dt=1e-3):
     # plt.fill_between(train_sizes, test_scores_mean - width, test_scores_mean + width, alpha=0.1)
 
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] # Default color order
-    start_t, end_t = get_interval(positions_curve, start_t=None, end_t=None)
     curve = positions_curve.derivative(nu=derivative)
+
+    start_t, end_t = get_interval(positions_curve, start_t=None, end_t=None)
     times = np.append(np.arange(start_t, end_t, step=dt), [end_t])
     for i, coords in enumerate(zip(*[curve(t) for t in times])):
         plt.plot(times, coords, color=colors[i], label='x[{}]'.format(i)) #, marker='o-')
-    times = np.append(np.arange(start_t, end_t, step=5e1*dt), [end_t])
+
+    #times = np.append(np.arange(start_t, end_t, step=5e1*dt), [end_t])
+    resolution = 5e-2
+    #times, _ = time_discretize_curve(curve, resolution=resolution)
+    #times, _ = derivative_discretize_curve(curve, resolution=resolution)
+    times, _ = distance_discretize_curve(curve, resolution=resolution)
+    print('Discretize steps:', np.array(times))
+
     for i, coords in enumerate(zip(*[curve(t) for t in times])):
         plt.plot(times, coords, color=colors[i], label='x[{}]'.format(i), marker='x') # o | + | x
 
     for t in curve.x:
         plt.axvline(x=t, color='black')
     extrema = find_extrema(curve)
-    print(extrema)
+    print('Extrema:', np.array(extrema))
     #plt.vlines(extrema)
     for t in extrema:
         plt.axvline(x=t, color='green')
