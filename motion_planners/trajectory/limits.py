@@ -125,19 +125,28 @@ def find_max_curve(curve, start_t=None, end_t=None, norm=INF, **kwargs):
 
 ##################################################
 
-def maximize_curve(curve, start_t=None, end_t=None, discontinuity=True, ignore=set()): # fn=None
+def filter_times(curve, times, start_t=None, end_t=None):
     start_t, end_t = get_interval(curve, start_t=start_t, end_t=end_t)
-    #d = curve(start_t)
+    return sorted(t for t in set(times) if not np.isnan(t) and (start_t <= t <= end_t))
+
+def find_extrema(curve, discontinuity=True, **kwargs):
     derivative = curve.derivative(nu=1)
-    times = list(curve.x)
+    times = []
     roots = derivative.roots(discontinuity=discontinuity)
     for r in roots:
         if r.shape:
             times.extend(r)
         else:
             times.append(r)
-    times = sorted(t for t in times if not np.isnan(t)
-                   and (start_t <= t <= end_t) and (t not in ignore)) # TODO: filter repeated
+    return filter_times(curve, times, **kwargs)
+
+def find_candidates(curve, **kwargs):
+    return filter_times(curve, list(curve.x) + find_extrema(curve, **kwargs))
+
+def maximize_curve(curve, ignore=set(), **kwargs): # fn=None
+    #d = curve(start_t)
+    times = find_candidates(curve, **kwargs)
+    times = [t for t in times if t not in ignore] # TODO: filter repeated
     #fn = lambda t: max(np.absolute(curve(t)))
     fn = lambda t: np.linalg.norm(curve(t), ord=INF) if curve(t).shape else float(curve(t))
     #fn = max

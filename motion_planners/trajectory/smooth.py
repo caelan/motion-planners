@@ -4,7 +4,7 @@ import time
 import numpy as np
 
 from .linear import find_lower_bound
-from .limits import check_spline
+from .limits import check_spline, find_extrema
 from .discretize import time_discretize_curve
 from .parabolic import solve_multi_poly, solve_multivariate_ramp
 from .retime import EPSILON, trim, spline_duration, append_polys, get_interval
@@ -193,6 +193,14 @@ def plot_curve(positions_curve, derivative=0, dt=1e-3):
     times = np.append(np.arange(start_t, end_t, step=5e1*dt), [end_t])
     for i, coords in enumerate(zip(*[curve(t) for t in times])):
         plt.plot(times, coords, color=colors[i], label='x[{}]'.format(i), marker='x') # o | + | x
+
+    for t in curve.x:
+        plt.axvline(x=t, color='black')
+    extrema = find_extrema(curve)
+    print(extrema)
+    #plt.vlines(extrema)
+    for t in extrema:
+        plt.axvline(x=t, color='green')
 
     plt.xlabel('Time')
     plt.ylabel(DERIVATIVE_NAMES[derivative])
