@@ -182,7 +182,7 @@ def solve_lazy_prm(viewer, start, goal, sample_fn, extend_fn, collision_fn, radi
 ##################################################
 
 
-def main(draw=False):
+def main(draw=True):
     """
     Creates and solves the 2D motion planning problem.
     """

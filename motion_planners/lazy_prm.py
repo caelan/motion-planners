@@ -1,9 +1,9 @@
 from heapq import heappush, heappop
 from collections import namedtuple, defaultdict
 
-from .nearest import NearestNeighbors
+from .nearest import NearestNeighbors, BruteForceNeighbors
 from .utils import INF, elapsed_time, get_pairs, default_selector, refine_waypoints, irange, \
-    merge_dicts, compute_path_cost, get_length, is_path
+    merge_dicts, compute_path_cost, get_length, is_path, flatten
 
 import time
 import numpy as np
@@ -89,22 +89,31 @@ def get_distance_fn(weights, p_norm=2):
     embed_fn = get_embed_fn(weights)
     return lambda q1, q2: np.linalg.norm(embed_fn(q2) - embed_fn(q1), ord=p_norm)
 
+def distance_fn_from_extend_fn(extend_fn):
+    def distance_fn(q1, q2):
+        path = list(extend_fn(q1, q2))
+        return len(path) # TODO: subtract endpoints?
+    return distance_fn
+
 ##################################################
 
 class Roadmap(object):
-    def __init__(self, weights, cost_fn, samples=[], p_norm=2, max_degree=5,
+    def __init__(self, extend_fn, weights, cost_fn, samples=[], p_norm=2, max_degree=5,
                  max_distance=INF, approximate_eps=0., **kwargs):
         # TODO: custom cost_fn
+        self.extend_fn = extend_fn
         self.weights = np.array(weights)
         self.cost_fn = cost_fn
         self.p_norm = p_norm
         self.max_degree = max_degree
         self.max_distance = max_distance
         self.approximate_eps = approximate_eps
-        self.nearest = NearestNeighbors(embed_fn=get_embed_fn(self.weights), **kwargs)
+        #self.nearest = NearestNeighbors(embed_fn=get_embed_fn(self.weights), **kwargs)
+        self.nearest = BruteForceNeighbors(get_distance_fn(weights, p_norm=p_norm))
         self.edges = set()
         self.outgoing_from_edges = defaultdict(set)
         self.edge_costs = {}
+        self.edge_paths = {}
         self.colliding_vertices = {}
         self.colliding_edges = {}
         self.add_samples(samples)
@@ -149,21 +158,19 @@ class Roadmap(object):
             # TODO: could update the colliding adjacent edges as well
             colliding_vertices[v] = collision_fn(x)
         return not colliding_vertices[v]
-    def check_edge(self, v1, v2, collision_fn, extend_fn):
+    def check_edge(self, v1, v2, collision_fn):
         colliding_edges = self.colliding_edges
         if (v1, v2) not in colliding_edges:
-            x1 = self.samples[v1]
-            x2 = self.samples[v2]
-            segment = default_selector(extend_fn(x1, x2))
+            segment = default_selector(self.get_path(v1, v2))
             colliding_edges[v1, v2] = any(map(collision_fn, segment))
             colliding_edges[v2, v1] = colliding_edges[v1, v2]
         return not colliding_edges[v1, v2]
-    def check_path(self, path, extend_fn, collision_fn):
+    def check_path(self, path, collision_fn):
         for v in default_selector(path):
             if not self.check_vertex(v, collision_fn):
                 return False
         for v1, v2 in default_selector(get_pairs(path)):
-            if not self.check_edge(v1, v2, collision_fn, extend_fn):
+            if not self.check_edge(v1, v2, collision_fn):
                 return False
         return True
     def check_roadmap(self, collision_fn, extend_fn):
@@ -176,6 +183,13 @@ class Roadmap(object):
         if edge not in self.edge_costs:
             self.edge_costs[edge] = self.edge_costs[edge] = self.cost_fn(self.samples[v1], self.samples[v2])
         return self.edge_costs[edge]
+    def get_path(self, v1, v2):
+        # TODO: assume reversible?
+        edge = (v1, v2)
+        if edge not in self.edge_paths:
+            path = list(self.extend_fn(self.samples[v1], self.samples[v2]))
+            self.edge_paths[edge] = self.edge_paths[edge] = path
+        return self.edge_paths[edge]
     def sample(self, sample_fn, num_samples, max_time=INF):
         # TODO: compute number of rejected samples
         start_time = time.time()
@@ -218,7 +232,7 @@ def calculate_radius(d=2):
 
 ##################################################
 
-def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, roadmap=None, num_samples=100,
+def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, cost_fn=None, roadmap=None, num_samples=100,
              weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, w=1., verbose=True, **kwargs): #, max_paths=INF):
     """
     :param start: Start configuration - conf
@@ -243,14 +257,14 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, road
         cost_fn = get_distance_fn(weights, p_norm=p_norm) # TODO: additive cost, acceleration cost
 
     if roadmap is None:
-        roadmap = Roadmap(weights, cost_fn, samples=[start, goal], leafsize=10, compact_nodes=True,
+        roadmap = Roadmap(extend_fn, weights, cost_fn, samples=[start, goal], leafsize=10, compact_nodes=True,
                           copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
     roadmap = roadmap.augment(sample_fn, num_samples=num_samples)
 
     samples, vertices, edges = roadmap
     neighbors_from_index = roadmap.outgoing_from_edges
-    start_index = roadmap.index(start)
-    end_index = roadmap.index(goal)
+    start_vertex = roadmap.index(start)
+    end_vertex = roadmap.index(goal)
     degree = np.average(list(map(len, neighbors_from_index.values())))
 
     # TODO: update collision occupancy based on proximity to existing colliding (for diversity as well)
@@ -267,14 +281,14 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, road
     #weight_fn = lambda v1, v2: ORDINAL*lazy_fn(v1, v2) + cost_fn(samples[v1], samples[v2])
     #w = 0
 
-    visited = dijkstra(end_index, roadmap.neighbors_fn, weight_fn)
+    visited = dijkstra(end_vertex, roadmap.neighbors_fn, weight_fn)
     heuristic_fn = lambda v: visited[v].g if (v in visited) else INF
     #heuristic_fn = zero_heuristic_fn
-    #heuristic_fn = lambda v: weight_fn(v, end_index)
+    #heuristic_fn = lambda v: weight_fn(v, end_vertex)
     path = None
     while (elapsed_time(start_time) < max_time) and (path is None): # TODO: max_attempts
         # TODO: extra cost to prioritize reusing checked edges
-        lazy_path = wastar_search(start_index, end_index, neighbors_fn=roadmap.neighbors_fn,
+        lazy_path = wastar_search(start_vertex, end_vertex, neighbors_fn=roadmap.neighbors_fn,
                                   cost_fn=weight_fn, heuristic_fn=heuristic_fn,
                                   max_cost=max_cost, max_time=max_time-elapsed_time(start_time), w=w)
         if lazy_path is None:
@@ -284,13 +298,14 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, road
             print('Length: {} | Cost: {:.3f} | Vertices: {} | Edges: {} | Degree: {:.3f} | Time: {:.3f}'.format(
                 len(lazy_path), cost, len(roadmap.colliding_vertices), len(roadmap.colliding_edges),
                 degree, elapsed_time(start_time)))
-        if roadmap.check_path(lazy_path, extend_fn, collision_fn):
+        if roadmap.check_path(lazy_path, collision_fn):
             path = lazy_path
 
     if path is None:
         return path, samples, edges, roadmap.colliding_vertices, roadmap.colliding_edges
-    waypoints = [samples[v] for v in path]
-    solution = [start] + refine_waypoints(waypoints, extend_fn)
+    #waypoints = [samples[v] for v in path]
+    #solution = [start] + refine_waypoints(waypoints, extend_fn)
+    solution = [start] + list(flatten(roadmap.get_path(v1, v2) for v1, v2 in get_pairs(path)))
     return solution, samples, edges, roadmap.colliding_vertices, roadmap.colliding_edges
 
 ##################################################
@@ -314,7 +329,7 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None,
 
     if param_sequence is None:
         param_sequence = create_param_sequence()
-    roadmap = Roadmap(weights, cost_fn, samples=[start, goal], circular=circular)
+    roadmap = Roadmap(extend_fn, weights, cost_fn, samples=[start, goal], circular=circular)
                       #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
     #roadmap = None
     ROADMAPS.append(roadmap)

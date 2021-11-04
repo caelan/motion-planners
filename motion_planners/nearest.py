@@ -19,6 +19,8 @@ def expand_circular(x, circular={}):
         wx = x + np.array(dx)
         yield wx
 
+##################################################
+
 class NearestNeighbors(object):
     # https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html
@@ -43,6 +45,7 @@ class NearestNeighbors(object):
             self.data.append(x)
             self.embedded.append(self.embed_fn(x))
         if self.embedded:
+            # TODO: do lazily if stale
             self.kd_tree = KDTree(self.embedded,
                                   #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None
                                   **self.kwargs)
@@ -59,3 +62,26 @@ class NearestNeighbors(object):
                     closest_neighbors[i] = d
         return [(d, i, self.data[i]) for i, d in sorted(
             closest_neighbors.items(), key=lambda pair: pair[1])][:k] # TODO: filter
+
+##################################################
+
+class BruteForceNeighbors(object):
+    def __init__(self, distance_fn, data=[], **kwargs):
+        self.distance_fn = distance_fn
+        self.data = []
+        self.add_data(data)
+    def add_data(self, new_data):
+        indices = []
+        for x in new_data:
+            index = len(self.data)
+            indices.append(index)
+            self.data.append(x)
+        return zip(indices, new_data)
+    def query_neighbors(self, x, k=1, **kwargs):
+        # TODO: store pairwise distances
+        neighbors = []
+        for i, x2 in enumerate(self.data):
+            d = self.distance_fn(x, x2)
+            neighbors.append((d, i, x2))
+        # TODO: heapq
+        return sorted(neighbors, key=lambda pair: pair[0])[:k]
