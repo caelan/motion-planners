@@ -106,9 +106,11 @@ def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorith
         path = lazy_prm(start, goal, sample_fn, extend_fn, collision_fn,
                         num_samples=num_samples, max_time=max_time, weights=weights)[0]
     elif algorithm == 'lazy_prm_star':
+        if weights is not None:
+            distance_fn = None
         param_sequence = create_param_sequence(initial_samples=num_samples)
         path = lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, param_sequence=param_sequence,
-                             max_time=max_time, weights=weights, circular=circular,
+                             max_time=max_time, weights=weights, circular=circular, distance_fn=distance_fn,
                              cost_fn=cost_fn, success_cost=success_cost,
                              verbose=verbose) # **kwargs)
     elif algorithm == 'rrt':

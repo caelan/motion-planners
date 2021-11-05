@@ -22,6 +22,18 @@ def expand_circular(x, circular={}):
 ##################################################
 
 class NearestNeighbors(object):
+    def __init__(self):
+        pass
+        # self.data = []
+        # self.add_data(data)
+    def add_data(self, new_data):
+        raise NotImplementedError()
+    def query_neighbors(self, x, k=1, **kwargs):
+        raise NotImplementedError()
+
+##################################################
+
+class KDNeighbors(NearestNeighbors):
     # https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html
     # TODO: approximate KDTrees
@@ -29,6 +41,7 @@ class NearestNeighbors(object):
     # https://github.com/spotify/annoy
     # https://github.com/flann-lib/flann
     def __init__(self, data=[], circular={}, embed_fn=lambda x: x, **kwargs): # [0, 1]
+        super(NearestNeighbors, self).__init__()
         # TODO: maintain tree and brute-force list
         self.data = [] # TODO: self.kd_tree.data
         self.embedded = []
@@ -65,8 +78,9 @@ class NearestNeighbors(object):
 
 ##################################################
 
-class BruteForceNeighbors(object):
+class BruteForceNeighbors(NearestNeighbors):
     def __init__(self, distance_fn, data=[], **kwargs):
+        super(BruteForceNeighbors, self).__init__()
         self.distance_fn = distance_fn
         self.data = []
         self.add_data(data)

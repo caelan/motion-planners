@@ -1,7 +1,7 @@
 from heapq import heappush, heappop
 from collections import namedtuple, defaultdict
 
-from .nearest import NearestNeighbors, BruteForceNeighbors
+from .nearest import NearestNeighbors, BruteForceNeighbors, KDNeighbors
 from .utils import INF, elapsed_time, get_pairs, default_selector, refine_waypoints, irange, \
     merge_dicts, compute_path_cost, get_length, is_path, flatten
 
@@ -82,7 +82,28 @@ def wastar_search(start_v, end_v, neighbors_fn, cost_fn=unit_cost_fn,
 
 ##################################################
 
+def calculate_radius(d=2):
+    # TODO: unify with get_threshold_fn
+    # Sampling-based Algorithms for Optimal Motion Planning
+    # http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.419.5503&rep=rep1&type=pdf
+    # https://en.wikipedia.org/wiki/Volume_of_an_n-ball
+    interval = (1 - 0)
+    vol_free = interval ** d
+    radius = 1./2
+    vol_ball = np.pi * (radius ** d)
+    gamma = 2 * ((1 + 1. / d) * (vol_free / vol_ball)) ** (1. / d)
+    # threshold = gamma * (math.log(n) / n) ** (1. / d)
+    return gamma
+
+def default_weights(conf, weights=None, scale=1.):
+    if weights is not None:
+        return weights
+    d = len(conf)
+    weights = scale*np.ones(d)
+    return weights
+
 def get_embed_fn(weights):
+    weights = np.array(weights)
     return lambda q: weights * q
 
 def get_distance_fn(weights, p_norm=2):
@@ -90,6 +111,7 @@ def get_distance_fn(weights, p_norm=2):
     return lambda q1, q2: np.linalg.norm(embed_fn(q2) - embed_fn(q1), ord=p_norm)
 
 def distance_fn_from_extend_fn(extend_fn):
+    # TODO: can compute cost between waypoints from extend_fn
     def distance_fn(q1, q2):
         path = list(extend_fn(q1, q2))
         return len(path) # TODO: subtract endpoints?
@@ -98,18 +120,23 @@ def distance_fn_from_extend_fn(extend_fn):
 ##################################################
 
 class Roadmap(object):
-    def __init__(self, extend_fn, weights, cost_fn, samples=[], p_norm=2, max_degree=5,
+    def __init__(self, extend_fn, weights=None, distance_fn=None, cost_fn=None, samples=[], p_norm=2, max_degree=5,
                  max_distance=INF, approximate_eps=0., **kwargs):
         # TODO: custom cost_fn
+        assert (weights is not None) or (distance_fn is not None)
+        self.distance_fn = distance_fn
         self.extend_fn = extend_fn
-        self.weights = np.array(weights)
+        self.weights = weights
         self.cost_fn = cost_fn
         self.p_norm = p_norm
         self.max_degree = max_degree
         self.max_distance = max_distance
         self.approximate_eps = approximate_eps
-        #self.nearest = NearestNeighbors(embed_fn=get_embed_fn(self.weights), **kwargs)
-        self.nearest = BruteForceNeighbors(get_distance_fn(weights, p_norm=p_norm))
+        if self.weights is None:
+            self.nearest = BruteForceNeighbors(self.distance_fn)
+        else:
+            self.nearest = KDNeighbors(embed_fn=get_embed_fn(self.weights), **kwargs)
+            #self.nearest = BruteForceNeighbors(get_distance_fn(weights, p_norm=p_norm))
         self.edges = set()
         self.outgoing_from_edges = defaultdict(set)
         self.edge_costs = {}
@@ -173,11 +200,11 @@ class Roadmap(object):
             if not self.check_edge(v1, v2, collision_fn):
                 return False
         return True
-    def check_roadmap(self, collision_fn, extend_fn):
+    def check_roadmap(self, collision_fn):
         for vertex in self.vertices:
             self.check_vertex(vertex, collision_fn)
         for vertex1, vertex2 in self.edges:
-            self.check_edge(vertex1, vertex2, collision_fn, extend_fn) # TODO: cache extend_fn
+            self.check_edge(vertex1, vertex2, collision_fn)
     def get_cost(self, v1, v2):
         edge = (v1, v2)
         if edge not in self.edge_costs:
@@ -210,28 +237,6 @@ class Roadmap(object):
 
 ##################################################
 
-def default_weights(conf, weights=None, scale=1.):
-    if weights is not None:
-        return weights
-    d = len(conf)
-    weights = scale*np.ones(d)
-    return weights
-
-def calculate_radius(d=2):
-    # TODO: unify with get_threshold_fn
-    # Sampling-based Algorithms for Optimal Motion Planning
-    # http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.419.5503&rep=rep1&type=pdf
-    # https://en.wikipedia.org/wiki/Volume_of_an_n-ball
-    interval = (1 - 0)
-    vol_free = interval ** d
-    radius = 1./2
-    vol_ball = np.pi * (radius ** d)
-    gamma = 2 * ((1 + 1. / d) * (vol_free / vol_ball)) ** (1. / d)
-    # threshold = gamma * (math.log(n) / n) ** (1. / d)
-    return gamma
-
-##################################################
-
 def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, cost_fn=None, roadmap=None, num_samples=100,
              weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, w=1., verbose=True, **kwargs): #, max_paths=INF):
     """
@@ -251,14 +256,17 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, 
     # TODO: multi-query motion planning
     start_time = time.time()
     # TODO: can embed pose and/or points on the robot for other distances
-    weights = default_weights(start, weights=weights)
-    # TODO: can compute cost between waypoints from extend_fn
+    if (weights is None) and (distance_fn is None):
+        weights = default_weights(start, weights=weights)
     if cost_fn is None:
-        cost_fn = get_distance_fn(weights, p_norm=p_norm) # TODO: additive cost, acceleration cost
+        if distance_fn is None:
+            cost_fn = get_distance_fn(weights, p_norm=p_norm) # TODO: additive cost, acceleration cost
+        else:
+            cost_fn = distance_fn
 
     if roadmap is None:
-        roadmap = Roadmap(extend_fn, weights, cost_fn, samples=[start, goal], leafsize=10, compact_nodes=True,
-                          copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
+        roadmap = Roadmap(extend_fn, weights=weights, distance_fn=distance_fn, cost_fn=cost_fn, samples=[start, goal],
+                          leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
     roadmap = roadmap.augment(sample_fn, num_samples=num_samples)
 
     samples, vertices, edges = roadmap
@@ -270,7 +278,7 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, 
     # TODO: update collision occupancy based on proximity to existing colliding (for diversity as well)
     # TODO: minimize the maximum distance to colliding
     if not lazy:
-        roadmap.check_roadmap(collision_fn, extend_fn)
+        roadmap.check_roadmap(collision_fn)
 
     weight_fn = roadmap.get_cost
     #weight_fn = lambda v1, v2: cost_fn(samples[v1], samples[v2])
@@ -329,7 +337,7 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None,
 
     if param_sequence is None:
         param_sequence = create_param_sequence()
-    roadmap = Roadmap(extend_fn, weights, cost_fn, samples=[start, goal], circular=circular)
+    roadmap = Roadmap(extend_fn, weights=weights, cost_fn=cost_fn, samples=[start, goal], circular=circular)
                       #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
     #roadmap = None
     ROADMAPS.append(roadmap)
