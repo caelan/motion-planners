@@ -194,6 +194,8 @@ def main(draw=True):
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--algorithm', default='rrt_connect',
                         help='The algorithm to use.')
+    parser.add_argument('--anytime', action='store_true',
+                        help='Run the planner in an anytime mode.')
     parser.add_argument('-d', '--draw', action='store_true',
                         help='When enabled, draws the roadmap')
     parser.add_argument('-r', '--restarts', default=0, type=int,
@@ -266,7 +268,8 @@ def main(draw=True):
             cost_fn = get_duration_fn(difference_fn=get_difference_fn(circular=circular), v_max=V_MAX, a_max=A_MAX)
             path = solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                          cost_fn=cost_fn, weights=weights, circular=circular,
-                         max_time=args.time, max_iterations=INF, num_samples=100, # success_cost=0,
+                         max_time=args.time, max_iterations=INF, num_samples=100,
+                         success_cost=0 if args.anytime else INF,
                          restarts=2, smooth=0, algorithm=args.algorithm, verbose=True)
             #print(ROADMAPS)
 

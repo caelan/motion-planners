@@ -237,6 +237,18 @@ class Roadmap(object):
 
 ##################################################
 
+def get_metrics(conf, weights=None, p_norm=2, distance_fn=None, cost_fn=None):
+    # TODO: can embed pose and/or points on the robot for other distances
+    if (weights is None) and (distance_fn is None):
+        weights = default_weights(conf, weights=weights)
+        #distance_fn = distance_fn_from_extend_fn(extend_fn)
+    if cost_fn is None:
+        if distance_fn is None:
+            cost_fn = get_distance_fn(weights, p_norm=p_norm) # TODO: additive cost, acceleration cost
+        else:
+            cost_fn = distance_fn
+    return weights, distance_fn, cost_fn
+
 def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, cost_fn=None, roadmap=None, num_samples=100,
              weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, w=1., verbose=True, **kwargs): #, max_paths=INF):
     """
@@ -255,15 +267,7 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, 
     # TODO: multiple collision functions to allow partial reuse
     # TODO: multi-query motion planning
     start_time = time.time()
-    # TODO: can embed pose and/or points on the robot for other distances
-    if (weights is None) and (distance_fn is None):
-        weights = default_weights(start, weights=weights)
-    if cost_fn is None:
-        if distance_fn is None:
-            cost_fn = get_distance_fn(weights, p_norm=p_norm) # TODO: additive cost, acceleration cost
-        else:
-            cost_fn = distance_fn
-
+    weights, distance_fn, cost_fn = get_metrics(start, weights=weights, p_norm=p_norm, distance_fn=distance_fn, cost_fn=cost_fn)
     if roadmap is None:
         roadmap = Roadmap(extend_fn, weights=weights, distance_fn=distance_fn, cost_fn=cost_fn, samples=[start, goal],
                           leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
@@ -324,20 +328,19 @@ def create_param_sequence(initial_samples=100, step_samples=100, **kwargs):
     return (merge_dicts(kwargs, {'num_samples': num_samples})
             for num_samples in irange(start=initial_samples, stop=INF, step=step_samples))
 
-def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, cost_fn=None, max_cost=INF, success_cost=INF,
+def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, cost_fn=None, max_cost=INF, success_cost=INF,
                   param_sequence=None, weights=None, circular={}, p_norm=2, max_time=INF, verbose=False, **kwargs):
     # TODO: bias to stay near the (past/hypothetical) path
     # TODO: proximity pessimistic collision checking
     # TODO: roadmap reuse in general
     # TODO: keep planning with increasing resolution
     start_time = time.time()
-    weights = default_weights(start, weights=weights)
-    if cost_fn is None:
-        cost_fn = get_distance_fn(weights, p_norm=p_norm) # TODO: additive cost, acceleration cost
-
+    weights, distance_fn, cost_fn = get_metrics(start, weights=weights, p_norm=p_norm, distance_fn=distance_fn, cost_fn=cost_fn)
+    #print(weights, distance_fn, cost_fn)
+    #input()
     if param_sequence is None:
         param_sequence = create_param_sequence()
-    roadmap = Roadmap(extend_fn, weights=weights, cost_fn=cost_fn, samples=[start, goal], circular=circular)
+    roadmap = Roadmap(extend_fn, weights=weights, distance_fn=distance_fn, cost_fn=cost_fn, samples=[start, goal], circular=circular)
                       #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
     #roadmap = None
     ROADMAPS.append(roadmap)
