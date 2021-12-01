@@ -174,24 +174,30 @@ class Roadmap(object):
                 if (v1 != v2): # and (d <= self.max_distance):
                     new_edges.update(self.add_edge(v1, v2))
         return new_edges
+    def is_colliding(self, v1, v2):
+        edge = (v1, v2)
+        return self.colliding_vertices.get(v1, False) or \
+               self.colliding_vertices.get(v2, False) or \
+               self.colliding_edges.get(edge, False)
+    def is_safe(self, v1, v2):
+        edge = (v1, v2)
+        return not self.colliding_edges.get(edge, True)
     def neighbors_fn(self, v1):
         for v2 in self.outgoing_from_edges[v1]:
-            if not self.colliding_vertices.get(v2, False) and not self.colliding_edges.get((v1, v2), False):
+            if not self.is_colliding(v1, v2):
                 yield v2
     def check_vertex(self, v, collision_fn):
         x = self.samples[v]
-        colliding_vertices = self.colliding_vertices
-        if v not in colliding_vertices:
+        if v not in self.colliding_vertices:
             # TODO: could update the colliding adjacent edges as well
-            colliding_vertices[v] = collision_fn(x)
-        return not colliding_vertices[v]
+            self.colliding_vertices[v] = collision_fn(x)
+        return not self.colliding_vertices[v]
     def check_edge(self, v1, v2, collision_fn):
-        colliding_edges = self.colliding_edges
-        if (v1, v2) not in colliding_edges:
+        if (v1, v2) not in self.colliding_edges:
             segment = default_selector(self.get_path(v1, v2))
-            colliding_edges[v1, v2] = any(map(collision_fn, segment))
-            colliding_edges[v2, v1] = colliding_edges[v1, v2]
-        return not colliding_edges[v1, v2]
+            self.colliding_edges[v1, v2] = any(map(collision_fn, segment))
+            self.colliding_edges[v2, v1] = self.colliding_edges[v1, v2]
+        return not self.colliding_edges[v1, v2]
     def check_path(self, path, collision_fn):
         for v in default_selector(path):
             if not self.check_vertex(v, collision_fn):

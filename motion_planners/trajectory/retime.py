@@ -312,6 +312,7 @@ class Curve(object):
         # TODO: adjust start time
         # https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PPoly.html#scipy.interpolate.PPoly
         self.poly = poly
+        # TODO: record antiderivatives
     @property
     def degree(self):
         k, m, d = self.poly.c.shape
@@ -341,8 +342,8 @@ class Curve(object):
     def __call__(self, *args, **kwargs):
         return self.at(*args, **kwargs)
     # TODO: way of inheriting these instead
-    def extrema(self):
-        raise NotImplementedError()
+    def extrema(self, **kwargs):
+        return find_extrema(self.poly, **kwargs)
     def derivative(self, *args, **kwargs):
         return Curve(self.poly.derivative(*args, **kwargs))
     def antiderivative(self, *args, **kwargs):
@@ -351,7 +352,7 @@ class Curve(object):
         return self.poly.roots(*args, **kwargs)
     def solve(self, *args, **kwargs):
         # TODO: solve for a bunch of y
-        return self.poly.solve(*args, **kwargs)
+        return self.poly.solve_tamp(*args, **kwargs)
     def sample_times(self, dt=1./60):
         return np.append(np.arange(self.start_t, self.end_t, step=dt), [self.end_t])
     def sample(self, *args, **kwargs):
@@ -360,3 +361,22 @@ class Curve(object):
     def __str__(self):
         return '{}(d={}, t=[{:.2f},{:.2f}])'.format(
             self.__class__.__name__, self.dim, self.start_t, self.end_t)
+
+##################################################
+
+def filter_extrema(curve, times, start_t=None, end_t=None):
+    # TODO: unify with filter_times
+    start_t, end_t = get_interval(curve, start_t=start_t, end_t=end_t)
+    return sorted(t for t in set(times) if not np.isnan(t) and (start_t <= t <= end_t))
+
+
+def find_extrema(curve, discontinuity=True, **kwargs):
+    derivative = curve.derivative(nu=1)
+    times = []
+    roots = derivative.roots(discontinuity=discontinuity)
+    for r in roots:
+        if r.shape:
+            times.extend(r)
+        else:
+            times.append(r)
+    return filter_extrema(curve, times, **kwargs)

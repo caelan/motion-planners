@@ -180,6 +180,7 @@ def solve_linear(difference, v_max, a_max):
 def solve_multi_linear(positions, v_max=None, a_max=None, **kwargs):
     from scipy.interpolate import PPoly
     positions = waypoints_from_path(positions, **kwargs)
+    #assert len(positions) >= 2
     d = len(positions[0])
     v_max, a_max = get_default_limits(d, v_max=v_max, a_max=a_max)
     splines = []
@@ -191,4 +192,5 @@ def solve_multi_linear(positions, v_max=None, a_max=None, **kwargs):
             c[:,:,k] = difference[k]*curve.c
             c[-1,:,k] += x1[k]
         splines.append(PPoly(c=c, x=curve.x))
+    assert splines
     return append_polys(*splines)

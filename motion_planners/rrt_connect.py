@@ -5,6 +5,8 @@ from .primitives import extend_towards
 from .rrt import TreeNode, configs
 from .utils import irange, RRT_ITERATIONS, INF, elapsed_time
 
+TREES = [] # TODO: return the trees
+
 def wrap_collision_fn(collision_fn):
     # TODO: joint limits
     # import inspect
@@ -46,7 +48,7 @@ def rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
         return None
     # TODO: support continuous collision_fn with two arguments
     #collision_fn = wrap_collision_fn(collision_fn)
-    nodes1, nodes2 = [TreeNode(start)], [TreeNode(goal)] # TODO: allow a tree to be prespecified (possibly as start)
+    nodes1, nodes2 = [TreeNode(start)], [TreeNode(goal)] # TODO: allow a tree to be pre-specified (possibly as start)
     for iteration in irange(max_iterations):
         if elapsed_time(start_time) >= max_time:
             break
@@ -68,7 +70,6 @@ def rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
                 path1, path2 = path2, path1
             #print('{} max_iterations, {} nodes'.format(iteration, len(nodes1) + len(nodes2)))
             path = configs(path1[:-1] + path2[::-1])
-            # TODO: return the trees
             return path
     return None
 

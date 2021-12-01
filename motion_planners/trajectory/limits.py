@@ -1,9 +1,8 @@
 import time
 import numpy as np
 
-from .retime import EPSILON, get_max_velocity, poly_from_spline
+from .retime import EPSILON, get_max_velocity, poly_from_spline, get_interval, filter_extrema, find_extrema
 from ..utils import INF, elapsed_time
-from .retime import get_interval
 
 def old_check_spline(spline, v_max=None, a_max=None, start_idx=None, end_idx=None):
     # TODO: be careful about time vs index (here is index)
@@ -125,23 +124,8 @@ def find_max_curve(curve, start_t=None, end_t=None, norm=INF, **kwargs):
 
 ##################################################
 
-def filter_times(curve, times, start_t=None, end_t=None):
-    start_t, end_t = get_interval(curve, start_t=start_t, end_t=end_t)
-    return sorted(t for t in set(times) if not np.isnan(t) and (start_t <= t <= end_t))
-
-def find_extrema(curve, discontinuity=True, **kwargs):
-    derivative = curve.derivative(nu=1)
-    times = []
-    roots = derivative.roots(discontinuity=discontinuity)
-    for r in roots:
-        if r.shape:
-            times.extend(r)
-        else:
-            times.append(r)
-    return filter_times(curve, times, **kwargs)
-
 def find_candidates(curve, **kwargs):
-    return filter_times(curve, list(curve.x) + find_extrema(curve, **kwargs))
+    return filter_extrema(curve, list(curve.x) + find_extrema(curve, **kwargs))
 
 def maximize_curve(curve, ignore=set(), **kwargs): # fn=None
     #d = curve(start_t)
@@ -159,7 +143,7 @@ def exceeds_curve(curve, threshold, start_t=None, end_t=None, **kwargs):
     max_t, max_v = maximize_curve(curve, start_t=start_t, end_t=end_t, **kwargs)
     if np.greater(max_v, threshold):
         return max_t
-    return True
+    return None
 
 ##################################################
 
@@ -169,7 +153,6 @@ def find_max_velocity(positions_curve, analytical=True, **kwargs):
         return maximize_curve(velocities_curve)
     else:
         return find_max_curve(velocities_curve, **kwargs)
-
 
 def find_max_acceleration(positions_curve, **kwargs):
     # TODO: should only ever be quadratic
