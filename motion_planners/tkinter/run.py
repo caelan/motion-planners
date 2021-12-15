@@ -299,7 +299,8 @@ def main(draw=True):
                 for path in paths:
                     #extend_fn, roadmap = get_wrapped_extend_fn(environment, obstacles=obstacles)  # obstacles | []
                     #cost_fn = distance_fn
-                    smoothed = smooth_path(path, extend_fn, collision_fn, distance_fn=cost_fn,
+                    smoothed = smooth_path(path, extend_fn, collision_fn,
+                                           cost_fn=cost_fn, sample_fn=sample_fn,
                                            max_iterations=INF, max_time=args.time,
                                            converge_time=INF, verbose=True)
                     print('Smoothed distance_fn: {:.3f}'.format(compute_path_cost(smoothed, distance_fn)))

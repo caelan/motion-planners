@@ -65,8 +65,9 @@ def argmin(function, sequence):
     return values[scores.index(min(scores))]
 
 
-def get_pairs(lst):
-    return list(zip(lst[:-1], lst[1:]))
+def get_pairs(sequence):
+    sequence = list(sequence)
+    return list(zip(sequence[:-1], sequence[1:]))
 
 
 def merge_dicts(*args):
