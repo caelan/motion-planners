@@ -256,7 +256,7 @@ def get_metrics(conf, weights=None, p_norm=2, distance_fn=None, cost_fn=None):
     return weights, distance_fn, cost_fn
 
 def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, cost_fn=None, roadmap=None, num_samples=100,
-             weights=None, p_norm=2, lazy=True, max_cost=INF, max_time=INF, w=1., verbose=True, **kwargs): #, max_paths=INF):
+             weights=None, circular={}, p_norm=2, lazy=True, max_cost=INF, max_time=INF, w=1., verbose=True, **kwargs): #, max_paths=INF):
     """
     :param start: Start configuration - conf
     :param goal: End configuration - conf
@@ -275,8 +275,8 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, 
     start_time = time.time()
     weights, distance_fn, cost_fn = get_metrics(start, weights=weights, p_norm=p_norm, distance_fn=distance_fn, cost_fn=cost_fn)
     if roadmap is None:
-        roadmap = Roadmap(extend_fn, weights=weights, distance_fn=distance_fn, cost_fn=cost_fn, samples=[start, goal],
-                          leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
+        roadmap = Roadmap(extend_fn, weights=weights, distance_fn=distance_fn, cost_fn=cost_fn, samples=[start, goal], circular=circular)
+                          #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
     roadmap = roadmap.augment(sample_fn, num_samples=num_samples)
 
     samples, vertices, edges = roadmap

@@ -3,8 +3,11 @@ import math
 import numpy as np
 
 from .viewer import is_collision_free, contains, point_collides, sample_line, STEP_SIZE
+from ..trajectory.linear import get_default_limits, solve_linear
+from ..trajectory.retime import spline_duration
 from ..utils import interval_generator, get_distance, wrap_interval, get_difference, \
-    circular_difference, UNBOUNDED_LIMITS, INF
+    circular_difference, UNBOUNDED_LIMITS, INF, get_delta
+
 
 def get_difference_fn(circular={}):
     def fn(q2, q1):
@@ -20,6 +23,27 @@ def get_distance_fn(weights, difference_fn=get_difference):
         return np.sqrt(np.dot(weights, diff * diff))
     return fn
 
+
+def get_cost_fn(distance_fn=get_distance, constant=0., coefficient=1.):
+    def fn(q1, q2):
+        return constant + coefficient*distance_fn(q1, q2)
+    return fn
+
+
+def get_duration_fn(difference_fn=get_delta, t_constant=0., t_min=0., **kwargs):
+    v_max, a_max = get_default_limits(d=None, **kwargs)
+    def fn(q1, q2):
+        # TODO: be careful that not colinear with other waypoints
+        difference = difference_fn(q1, q2)
+        t_transit = 0.
+        if not np.allclose(np.zeros(len(difference)), difference, atol=1e-6, rtol=0):
+            curve = solve_linear(difference, v_max, a_max) # TODO: make faster
+            t_transit = spline_duration(curve)
+        t = t_constant + t_transit
+        return max(t_min, t) # TODO: clip function
+    return fn
+
+##################################################
 
 def wrap_sample_fn(sample_fn):
     samples = []
@@ -99,6 +123,9 @@ def get_collision_fn(environment, obstacles):
         return False
 
     return collision_fn
+
+
+##################################################
 
 
 def wrap_extend_fn(extend_fn):

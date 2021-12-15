@@ -93,6 +93,8 @@ def derivative_discretize_curve(positions_curve, resolution=DEFAULT_RESOLUTION, 
 
 
 def distance_discretize_curve(curve, resolution=DEFAULT_RESOLUTION, **kwargs):
+    # TODO: could compute for the full interval and then sort by proximity for speed purposes
+    # TODO: could sample at a small timestep and prune
     d = curve.c.shape[-1]
     resolutions = resolution*np.ones(d)
     start_t, end_t = get_interval(curve, **kwargs)

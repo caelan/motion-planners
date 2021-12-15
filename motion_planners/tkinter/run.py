@@ -6,19 +6,18 @@ import time
 import random
 
 from ..meta import solve
-from ..trajectory.linear import solve_multi_linear, solve_linear, get_default_limits
-from ..trajectory.discretize import time_discretize_curve, distance_discretize_curve, V_MAX, A_MAX
-from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_wrapped_extend_fn, \
-    get_distance_fn, wrap_collision_fn, wrap_sample_fn, get_difference_fn
+from ..trajectory.linear import solve_multi_linear
+from ..trajectory.discretize import distance_discretize_curve, V_MAX, A_MAX
+from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn, wrap_collision_fn, wrap_sample_fn, get_difference_fn, \
+    get_duration_fn
 from ..trajectory.smooth import smooth_curve, get_curve_collision_fn, plot_curve
 from ..trajectory.limits import analyze_continuity
-from ..trajectory.retime import spline_duration
 from .viewer import create_box, draw_environment, add_points, \
     add_roadmap, get_box_center, add_path, create_cylinder, add_timed_path
 from ..utils import user_input, profiler, INF, compute_path_cost, elapsed_time, remove_redundant, \
-    waypoints_from_path, get_delta, get_distance, UNIT_LIMITS
+    waypoints_from_path
 from ..prm import prm
-from ..lazy_prm import lazy_prm, ROADMAPS
+from ..lazy_prm import lazy_prm
 from ..rrt_connect import rrt_connect, birrt
 from ..rrt import rrt
 from ..rrt_star import rrt_star
@@ -36,26 +35,6 @@ ALGORITHMS = [
     # TODO: RRT in position/velocity space using spline interpolation
     # TODO: https://ompl.kavrakilab.org/planners.html
 ]
-
-##################################################
-
-def get_cost_fn(distance_fn=get_distance, constant=0., coefficient=1.):
-    def fn(q1, q2):
-        return constant + coefficient*distance_fn(q1, q2)
-    return fn
-
-def get_duration_fn(difference_fn=get_delta, t_constant=0., t_min=0., **kwargs):
-    v_max, a_max = get_default_limits(d=None, **kwargs)
-    def fn(q1, q2):
-        # TODO: be careful that not colinear with other waypoints
-        difference = difference_fn(q1, q2)
-        t_transit = 0.
-        if not np.allclose(np.zeros(len(difference)), difference, atol=1e-6, rtol=0):
-            curve = solve_linear(difference, v_max, a_max) # TODO: make faster
-            t_transit = spline_duration(curve)
-        t = t_constant + t_transit
-        return max(t_min, t) # TODO: clip function
-    return fn
 
 ##################################################
 
