@@ -3,12 +3,12 @@ import time
 
 import numpy as np
 
-from .linear import find_lower_bound
+from .linear import find_lower_bound, solve_linear
 from .limits import check_spline
-from .discretize import time_discretize_curve, derivative_discretize_curve, distance_discretize_curve
+from .discretize import time_discretize_curve, derivative_discretize_curve, distance_discretize_curve, sample_discretize_curve
 from .parabolic import solve_multi_poly, solve_multivariate_ramp
 from .retime import EPSILON, trim, spline_duration, append_polys, get_interval, find_extrema
-from ..utils import INF, elapsed_time, get_pairs, find, default_selector
+from ..utils import INF, elapsed_time, get_pairs, find, default_selector, waypoints_from_path
 
 
 def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, max_accelerations=None): # a_max
@@ -22,10 +22,7 @@ def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, ma
         #                     #start_t=t0, end_t=t1,
         #                     ):
         #     return True
-        # _, samples = time_discretize_curve(curve, verbose=False,
-        #                                    start_t=t0, end_t=t1,
-        #                                    #max_velocities=v_max,
-        #                                    )
+        # _, samples = time_discretize_curve(curve, verbose=False, start_t=t0, end_t=t1, #max_velocities=v_max)
         _, samples = distance_discretize_curve(curve, start_t=t0, end_t=t1)
         if any(map(collision_fn, default_selector(samples))):
            return True
@@ -162,6 +159,101 @@ def smooth_curve(start_curve, v_max, a_max, curve_collision_fn,
         curve = new_curve
     print('Iterations: {} | Start time: {:.3f} | End time: {:.3f} | Elapsed time: {:.3f}'.format(
         num, spline_duration(start_curve), spline_duration(curve), elapsed_time(start_time)))
+    check_spline(curve, v_max, a_max)
+    return curve
+
+##################################################
+
+def smooth_cubic(path, collision_fn, resolutions, v_max, a_max, time_step=1e-2,
+                 parabolic=False, intermediate=True, max_iterations=1000, max_time=INF, min_improve=0.):
+    if path is None:
+        return None
+    assert (max_iterations < INF) or (max_time < INF)
+    from scipy.interpolate import CubicHermiteSpline
+    start_time = time.time()
+    start_positions = waypoints_from_path(path) # TODO: ensure following the same path
+    start_durations = [0] + [solve_linear(np.subtract(p2, p1), v_max, a_max, only_duration=True)
+                             for p1, p2 in get_pairs(start_positions)]
+    start_times = np.cumsum(start_durations)
+    start_velocities = [np.zeros(len(start_positions[0])) for _ in range(len(start_positions))]
+    start_curve = CubicHermiteSpline(start_times, start_positions, dydx=start_velocities)
+
+    def curve_collision_fn(segment, t0=None, t1=None):
+        #if not check_spline(segment, v_max=v_max, a_max=None, start_t=t0, end_t=t1, verbose=False):
+        #    return True
+        _, samples = sample_discretize_curve(segment, resolutions, start_t=t0, end_t=t1, time_step=time_step)
+        if any(map(collision_fn, default_selector(samples))):
+           return True
+        return False
+
+    # if curve_collision_fn(start_curve, t0=None, t1=None):
+    #     #return None
+    #     return start_curve
+    curve = start_curve
+    for iteration in range(max_iterations):
+        if elapsed_time(start_time) >= max_time:
+            break
+        times = curve.x
+        durations = [0.] + [t2 - t1 for t1, t2 in get_pairs(times)]
+        positions = [curve(t) for t in times]
+        velocities = [curve(t, nu=1) for t in times]
+
+        t1, t2 = np.random.uniform(times[0], times[-1], 2)
+        if t1 > t2:
+            t1, t2 = t2, t1
+        ts = [t1, t2]
+        i1 = find(lambda i: times[i] <= t1, reversed(range(len(times)))) # index before t1
+        i2 = find(lambda i: times[i] >= t2, range(len(times))) # index after t2
+        assert i1 != i2
+
+        local_positions = [curve(t) for t in ts]
+        local_velocities = [curve(t, nu=1) for t in ts]
+        if not all(np.less_equal(np.absolute(v), np.array(v_max) + EPSILON).all() for v in local_velocities):
+            continue
+
+        x1, x2 = local_positions
+        v1, v2 = local_velocities
+        #min_t = 0
+        min_t = find_lower_bound(x1, x2, v1, v2, v_max=v_max, a_max=a_max)
+        current_t = (t2 - t1) - min_improve # TODO: percent improve
+        if min_t >= current_t:
+            continue
+
+        #best_t = min_t
+        max_t = current_t
+        if parabolic:
+            ramp_t = solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max) # Might not be feasible
+            ramp_t = INF if ramp_t is None else ramp_t
+            max_t = min(max_t, ramp_t)
+        best_t = random.uniform(min_t, max_t)
+        if best_t >= current_t:
+            continue
+
+        local_durations = [t1 - times[i1], best_t, times[i2] - t2]
+        #local_times = [0, best_t]
+        local_times = [t1, (t1 + best_t)] # Good if the collision function is time varying
+
+        if intermediate:
+            local_curve = CubicHermiteSpline(local_times, local_positions, dydx=local_velocities)
+            if curve_collision_fn(local_curve, t0=None, t1=None): # check_spline
+                continue
+            #local_positions = [local_curve(x) for x in local_curve.x]
+            #local_velocities = [local_curve(x, nu=1) for x in local_curve.x]
+            local_durations = [t1 - times[i1]] + [x - local_curve.x[0] for x in local_curve.x[1:]] + [times[i2] - t2]
+
+        new_durations = np.concatenate([durations[:i1 + 1], local_durations, durations[i2 + 1:]])
+        new_times = np.cumsum(new_durations)
+        new_positions = positions[:i1 + 1] + local_positions + positions[i2:]
+        new_velocities = velocities[:i1 + 1] + local_velocities + velocities[i2:]
+
+        new_curve = CubicHermiteSpline(new_times, new_positions, dydx=new_velocities)
+        if not intermediate and curve_collision_fn(new_curve, t0=None, t1=None):
+            continue
+        print('Iterations: {} | Current time: {:.3f} | New time: {:.3f} | Elapsed time: {:.3f}'.format(
+            iteration, spline_duration(curve), spline_duration(new_curve), elapsed_time(start_time)))
+        curve = new_curve
+    print('Iterations: {} | Start time: {:.3f} | End time: {:.3f} | Elapsed time: {:.3f}'.format(
+        max_iterations, spline_duration(start_curve), spline_duration(curve), elapsed_time(start_time)))
     check_spline(curve, v_max, a_max)
     return curve
 

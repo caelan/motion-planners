@@ -390,3 +390,10 @@ def get_interval_center(interval):
 def get_interval_extent(interval):
     lower, upper = interval
     return get_delta(lower, upper)
+
+
+def even_space(start, stop, step=1, endpoint=True):
+    sequence = np.arange(start, stop, step=step)
+    if not endpoint:
+        return sequence
+    return np.append(sequence, [stop])

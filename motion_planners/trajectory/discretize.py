@@ -2,8 +2,7 @@ import numpy as np
 
 from .retime import get_interval, spline_duration
 from .limits import find_max_velocity, find_max_acceleration
-from ..utils import get_distance, INF
-
+from ..utils import get_distance, INF, even_space
 
 V_MAX = 0.8*np.ones(2)
 A_MAX = abs(V_MAX - 0.) / abs(0.2 - 0.)
@@ -59,7 +58,7 @@ def time_discretize_curve(positions_curve, max_velocities=None,
     else:
         time_step = np.min(np.divide(resolutions, max_velocities))
 
-    times = np.append(np.arange(start_t, end_t, step=time_step), [end_t])
+    times = even_space(start_t, end_t, step=time_step)
     positions = [positions_curve(t) for t in times]
     times, positions = filter_proximity(times, positions, resolution)
     return times, positions
@@ -91,6 +90,20 @@ def derivative_discretize_curve(positions_curve, resolution=DEFAULT_RESOLUTION, 
     # TODO: distance between adjacent positions
     return times, positions
 
+##################################################
+
+def sample_discretize_curve(positions_curve, resolutions, time_step=1e-2, **kwargs):
+    start_t, end_t = get_interval(positions_curve, **kwargs)
+    times = [start_t]
+    samples = [positions_curve(start_t)]
+    for t in even_space(start_t, end_t, step=time_step):
+        positions = positions_curve(t)
+        if np.less_equal(samples[-1] - resolutions, positions).all() and  \
+                np.less_equal(positions, samples[-1] + resolutions).all():
+            continue
+        times.append(t)
+        samples.append(positions)
+    return times, samples
 
 def distance_discretize_curve(curve, resolution=DEFAULT_RESOLUTION, **kwargs):
     # TODO: could compute for the full interval and then sort by proximity for speed purposes
