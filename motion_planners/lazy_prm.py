@@ -299,7 +299,7 @@ def create_param_sequence(initial_samples=100, step_samples=100, **kwargs):
             for num_samples in irange(start=initial_samples, stop=INF, step=step_samples))
 
 def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, cost_fn=None, max_cost=INF, success_cost=INF,
-                  param_sequence=None, weights=None, circular={}, p_norm=2, max_time=INF, verbose=False, **kwargs):
+                  param_sequence=None, resuse=True, weights=None, circular={}, p_norm=2, max_time=INF, verbose=False, **kwargs):
     # TODO: bias to stay near the (past/hypothetical) path
     # TODO: proximity pessimistic collision checking
     # TODO: roadmap reuse in general
@@ -313,7 +313,6 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=N
     roadmap = Roadmap(extend_fn, weights=weights, distance_fn=distance_fn, cost_fn=cost_fn, samples=[start, goal], circular=circular)
                       #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
     #roadmap = None
-    ROADMAPS.append(roadmap)
 
     best_path = None
     best_cost = max_cost
@@ -324,6 +323,9 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=N
         if verbose:
             print('\nIteration: {} | Cost: {:.3f} | Elapsed: {:.3f} | Remaining: {:.3f} | Params: {}'.format(
                 i, best_cost, elapsed_time(start_time), remaining_time, params))
+        if not resuse:
+            roadmap = Roadmap(extend_fn, weights=weights, distance_fn=distance_fn, cost_fn=cost_fn,
+                              samples=[start, goal], circular=circular)
         new_path = lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, roadmap=roadmap,
                             cost_fn=cost_fn, weights=weights, circular=circular, p_norm=p_norm,
                             max_time=remaining_time, max_cost=best_cost,
@@ -336,4 +338,5 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=N
             best_cost = new_cost
         if best_cost < success_cost:
             break
+    ROADMAPS.append(roadmap)
     return best_path
