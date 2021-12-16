@@ -1,8 +1,9 @@
 from heapq import heappush, heappop
 from collections import namedtuple, defaultdict
 
-from .nearest import NearestNeighbors, BruteForceNeighbors, KDNeighbors
-from .utils import INF, elapsed_time, get_pairs, default_selector, refine_waypoints, irange, \
+from .nearest import BruteForceNeighbors, KDNeighbors
+from .primitives import default_weights, get_embed_fn, get_distance_fn
+from .utils import INF, elapsed_time, get_pairs, default_selector, irange, \
     merge_dicts, compute_path_cost, get_length, is_path, flatten
 
 import time
@@ -70,7 +71,7 @@ def wastar_search(start_v, end_v, neighbors_fn, cost_fn=unit_cost_fn,
             continue
         if goal_test(current_v):
             return retrace_path(visited, current_v)
-        for next_v in neighbors_fn(current_v):
+        for next_v in neighbors_fn(current_v): # TODO: lazily compute neighbors
             next_g = current_g + cost_fn(current_v, next_v)
             if (next_v not in visited) or (next_g < visited[next_v].g):
                 visited[next_v] = Node(next_g, current_v)
@@ -79,43 +80,6 @@ def wastar_search(start_v, end_v, neighbors_fn, cost_fn=unit_cost_fn,
                     next_p = priority_fn(next_g, next_h)
                     heappush(queue, (next_p, next_g, next_v))
     return None
-
-##################################################
-
-def calculate_radius(d=2):
-    # TODO: unify with get_threshold_fn
-    # Sampling-based Algorithms for Optimal Motion Planning
-    # http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.419.5503&rep=rep1&type=pdf
-    # https://en.wikipedia.org/wiki/Volume_of_an_n-ball
-    interval = (1 - 0)
-    vol_free = interval ** d
-    radius = 1./2
-    vol_ball = np.pi * (radius ** d)
-    gamma = 2 * ((1 + 1. / d) * (vol_free / vol_ball)) ** (1. / d)
-    # threshold = gamma * (math.log(n) / n) ** (1. / d)
-    return gamma
-
-def default_weights(conf, weights=None, scale=1.):
-    if weights is not None:
-        return weights
-    d = len(conf)
-    weights = scale*np.ones(d)
-    return weights
-
-def get_embed_fn(weights):
-    weights = np.array(weights)
-    return lambda q: weights * q
-
-def get_distance_fn(weights, p_norm=2):
-    embed_fn = get_embed_fn(weights)
-    return lambda q1, q2: np.linalg.norm(embed_fn(q2) - embed_fn(q1), ord=p_norm)
-
-def distance_fn_from_extend_fn(extend_fn):
-    # TODO: can compute cost between waypoints from extend_fn
-    def distance_fn(q1, q2):
-        path = list(extend_fn(q1, q2))
-        return len(path) # TODO: subtract endpoints?
-    return distance_fn
 
 ##################################################
 
@@ -300,7 +264,7 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, 
     #w = 0
 
     visited = dijkstra(end_vertex, roadmap.neighbors_fn, weight_fn)
-    heuristic_fn = lambda v: visited[v].g if (v in visited) else INF
+    heuristic_fn = lambda v: visited[v].g if (v in visited) else INF # TODO: lazily apply costs
     #heuristic_fn = zero_heuristic_fn
     #heuristic_fn = lambda v: weight_fn(v, end_vertex)
     path = None

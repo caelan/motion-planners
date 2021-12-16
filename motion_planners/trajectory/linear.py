@@ -118,7 +118,7 @@ def zero_three_stage(x1, x2, T, v_max=INF, a_max=INF):
 
 ##################################################
 
-def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0.):
+def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0., only_duration=False):
     # TODO: solve for a given T which is higher than the min T
     # TODO: solve for all joints at once using a linear interpolator
     # Can always rest at the start of the trajectory if need be
@@ -134,6 +134,9 @@ def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0.):
     if a_max == INF:
         T = d / v_max
         T += 2 * EPSILON
+        T = max(T_min, T)
+        if only_duration:
+            return T
         p_curve = zero_one_fixed(x1, x2, T, v_max=v_max)
         check_curve(p_curve, x1, x2, v1=0., v2=0., T=T, v_max=v_max, a_max=a_max)
         return p_curve
@@ -144,6 +147,8 @@ def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0.):
         #a = a_max
         assert T_min <= T
         T = max(T_min, T)
+        if only_duration:
+            return T
         p_curve = zero_two_ramp(x1, x2, T, v_max, a_max)
         check_curve(p_curve, x1, x2, v1=0., v2=0., T=T, v_max=v_max, a_max=a_max)
         return p_curve
@@ -154,6 +159,8 @@ def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0.):
 
     assert T_min <= T
     T = max(T_min, T)
+    if only_duration:
+        return T
     p_curve = zero_three_stage(x1, x2, T, v_max=v_max, a_max=a_max)
     check_curve(p_curve, x1, x2, v1=0., v2=0., T=T, v_max=v_max, a_max=a_max)
     return p_curve
@@ -170,12 +177,12 @@ def get_default_limits(d=None, v_max=None, a_max=None):
     assert len(v_max) == len(a_max)
     return v_max, a_max
 
-def solve_linear(difference, v_max, a_max):
-    # TODO: careful with circular joins
+def solve_linear(difference, v_max, a_max, **kwargs):
+    # TODO: careful with circular joints
     # TODO: careful if difference is zero
     unit_v_max = min(np.divide(v_max, np.absolute(difference)))
     unit_a_max = min(np.divide(a_max, np.absolute(difference)))
-    return opt_straight_line(x1=0., x2=1., v_max=unit_v_max, a_max=unit_a_max)
+    return opt_straight_line(x1=0., x2=1., v_max=unit_v_max, a_max=unit_a_max, **kwargs)
 
 def solve_multi_linear(positions, v_max=None, a_max=None, **kwargs):
     from scipy.interpolate import PPoly

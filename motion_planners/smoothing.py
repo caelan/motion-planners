@@ -2,6 +2,7 @@ from random import randint, random, choice
 
 from .utils import INF, elapsed_time, irange, waypoints_from_path, get_pairs, get_distance, \
     convex_combination, compute_path_cost, default_selector, refine_waypoints, flatten
+from .primitives import distance_fn_from_extend_fn
 
 import time
 import numpy as np
@@ -43,7 +44,7 @@ def smooth_path_old(path, extend_fn, collision_fn, cost_fn=None,
 
 ##################################################
 
-def smooth_path(path, extend_fn, collision_fn, cost_fn=None, sample_fn=None,
+def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, sample_fn=None,
                 max_iterations=50, max_time=INF, converge_time=INF, verbose=False):
     """
     :param distance_fn: Distance function - distance_fn(q1, q2)->float
@@ -60,9 +61,10 @@ def smooth_path(path, extend_fn, collision_fn, cost_fn=None, sample_fn=None,
     if (path is None) or (max_iterations is None):
         return path
     assert (max_iterations < INF) or (max_time < INF)
+    if distance_fn is None:
+        distance_fn = distance_fn_from_extend_fn(extend_fn)
     if cost_fn is None:
-        #cost_fn = distance_fn
-        cost_fn = lambda *pair: len(list(extend_fn(*pair))) # TODO: cache
+        cost_fn = distance_fn
     waypoints = waypoints_from_path(path)
     cost = compute_path_cost(waypoints, cost_fn=cost_fn)
     #paths = [extend_fn(*pair) for pair in get_pairs(waypoints)] # TODO: update incrementally
@@ -72,9 +74,9 @@ def smooth_path(path, extend_fn, collision_fn, cost_fn=None, sample_fn=None,
             break
 
         segments = get_pairs(range(len(waypoints)))
-        #weights = [distance_fn(waypoints[i], waypoints[j]) for i, j in segments]
+        weights = [distance_fn(waypoints[i], waypoints[j]) for i, j in segments]
         paths = [list(extend_fn(*pair)) for pair in get_pairs(waypoints)]
-        weights = [len(paths[i]) for i, j in segments]
+        #weights = [len(paths[i]) for i, j in segments]
         probabilities = np.array(weights) / sum(weights)
         if verbose:
             print('Iteration: {} | Waypoints: {} | Cost: {:.3f} | Elapsed: {:.3f} | Remaining: {:.3f}'.format(

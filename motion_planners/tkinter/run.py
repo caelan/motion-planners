@@ -8,8 +8,8 @@ import random
 from ..meta import solve
 from ..trajectory.linear import solve_multi_linear
 from ..trajectory.discretize import distance_discretize_curve, V_MAX, A_MAX
-from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn, wrap_collision_fn, wrap_sample_fn, get_difference_fn, \
-    get_duration_fn
+from .samplers import get_sample_fn, get_collision_fn, get_extend_fn, get_distance_fn, wrap_collision_fn, wrap_sample_fn
+from ..primitives import get_difference_fn, get_duration_fn
 from ..trajectory.smooth import smooth_curve, get_curve_collision_fn, plot_curve
 from ..trajectory.limits import analyze_continuity
 from .viewer import create_box, draw_environment, add_points, \
