@@ -211,18 +211,20 @@ def remove_redundant(path, tolerance=1e-3):
     return new_path
 
 
-def waypoints_from_path(path, tolerance=1e-3):
+def waypoints_from_path(path, difference_fn=None, tolerance=1e-3):
+    if difference_fn is None:
+        difference_fn = get_difference
     path = remove_redundant(path, tolerance=tolerance)
     if len(path) < 2:
         return path
     waypoints = [path[0]]
     last_conf = path[1]
-    last_difference = get_unit_vector(get_difference(last_conf, waypoints[-1]))
+    last_difference = get_unit_vector(difference_fn(last_conf, waypoints[-1]))
     for conf in path[2:]:
-        difference = get_unit_vector(get_difference(conf, waypoints[-1]))
+        difference = get_unit_vector(difference_fn(conf, waypoints[-1]))
         if not np.allclose(last_difference, difference, atol=tolerance, rtol=0):
             waypoints.append(last_conf)
-            difference = get_unit_vector(get_difference(conf, waypoints[-1]))
+            difference = get_unit_vector(difference_fn(conf, waypoints[-1]))
         last_conf = conf
         last_difference = difference
     waypoints.append(last_conf)
