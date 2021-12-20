@@ -6,6 +6,8 @@ from .limits import maximize_curve
 from .retime import EPSILON, curve_from_controls, check_time, parabolic_val, append_polys
 from ..utils import INF, get_sign, waypoints_from_path, get_pairs
 
+T_MIN = 1e-3 # EPSILON
+
 def quickest_inf_accel(x1, x2, v_max=INF):
     #return solve_zero_ramp(x1, x2, v_max=INF)
     return abs(x2 - x1) / abs(v_max)
@@ -19,7 +21,7 @@ def acceleration_cost(p_curve, **kwargs):
     max_t, max_a = maximize_curve(a_curve, **kwargs)
     return max_a
 
-def find_lower_bound(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
+def find_lower_bound(x1, x2, v1=None, v2=None, v_max=None, a_max=None, ord=INF):
     d = len(x1)
     if v_max is None:
         v_max = np.full(d, INF)
@@ -27,11 +29,11 @@ def find_lower_bound(x1, x2, v1=None, v2=None, v_max=None, a_max=None):
         a_max = np.full(d, INF)
     lower_bounds = [
         # Instantaneously accelerate
-        np.linalg.norm(np.divide(np.subtract(x2, x1), v_max), ord=INF),
+        np.linalg.norm(np.divide(np.subtract(x2, x1), v_max), ord=ord), # quickest_inf_accel
     ]
     if (v1 is not None) and (v2 is not None):
         lower_bounds.extend([
-            np.linalg.norm(np.divide(np.subtract(v2, v1), a_max), ord=INF),
+            np.linalg.norm(np.divide(np.subtract(v2, v1), a_max), ord=ord),
         ])
     return max(lower_bounds)
 
@@ -59,16 +61,16 @@ def check_curve(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
 
 ##################################################
 
-def zero_one_fixed(x1, x2, T, v_max=INF):
+def zero_one_fixed(x1, x2, T, v_max=INF, dt=EPSILON):
     from scipy.interpolate import PPoly
     assert 0 < v_max < INF
     sign = get_sign(x2 - x1)
     d = abs(x2 - x1)
     v = d / T
-    if v > v_max + EPSILON:
+    if v > (v_max + EPSILON):
         return None
-    dt = EPSILON
     t_hold = T - 2*dt
+    assert t_hold > 0
     v = d / t_hold
     #return zero_three_stage(x1, x2, T, v_max=v_max, a_max=1e6) # NOTE: approximation
     coeffs = [[0., x1], [sign*v, x1], [0., x2]]
@@ -82,9 +84,9 @@ def zero_two_ramp(x1, x2, T, v_max=INF, a_max=INF):
     d = abs(x2 - x1)
     t_accel = T / 2.
     a = d / t_accel ** 2 # Lower accel
-    if a > a_max + EPSILON:
+    if a > (a_max + EPSILON):
         return None
-    if a*t_accel > v_max + EPSILON:
+    if a*t_accel > (v_max + EPSILON):
         return None
     a = min(a, a_max) # Numerical error
     durations = [t_accel, t_accel]
@@ -106,7 +108,7 @@ def zero_three_stage(x1, x2, T, v_max=INF, a_max=INF):
     if not solutions:
         return None
     t1 = min(solutions)
-    if t1*a_max > v_max + EPSILON:
+    if t1*a_max > (v_max + EPSILON):
         return None
     #t1 = min(t1, v_max / a_max)
     t3 = t1
@@ -118,7 +120,7 @@ def zero_three_stage(x1, x2, T, v_max=INF, a_max=INF):
 
 ##################################################
 
-def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0., only_duration=False):
+def opt_straight_line(x1, x2, v_max=INF, a_max=INF, t_min=T_MIN, only_duration=False):
     # TODO: solve for a given T which is higher than the min T
     # TODO: solve for all joints at once using a linear interpolator
     # Can always rest at the start of the trajectory if need be
@@ -127,6 +129,7 @@ def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0., only_duration=Fals
     assert (v_max < INF) or (a_max < INF)
     #v_max = abs(x2 - x1) / abs(v_max)
     d = abs(x2 - x1)
+    #assert d > 0
     # if v_max == INF:
     #     raise NotImplementedError()
     # TODO: more efficient version
@@ -134,7 +137,7 @@ def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0., only_duration=Fals
     if a_max == INF:
         T = d / v_max
         T += 2 * EPSILON
-        T = max(T_min, T)
+        T = max(t_min, T)
         if only_duration:
             return T
         p_curve = zero_one_fixed(x1, x2, T, v_max=v_max)
@@ -145,8 +148,8 @@ def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0., only_duration=Fals
     if a_max*t_accel <= v_max:
         T = 2.*t_accel
         #a = a_max
-        assert T_min <= T
-        T = max(T_min, T)
+        assert t_min <= T
+        T = max(t_min, T)
         if only_duration:
             return T
         p_curve = zero_two_ramp(x1, x2, T, v_max, a_max)
@@ -157,8 +160,8 @@ def opt_straight_line(x1, x2, v_max=INF, a_max=INF, T_min=0., only_duration=Fals
     t2 = (d - 2 * parabolic_val(t1, a=a_max)) / v_max
     T = t1 + t2 + t3
 
-    assert T_min <= T
-    T = max(T_min, T)
+    assert t_min <= T
+    T = max(t_min, T)
     if only_duration:
         return T
     p_curve = zero_three_stage(x1, x2, T, v_max=v_max, a_max=a_max)
@@ -186,7 +189,10 @@ def solve_linear(difference, v_max, a_max, **kwargs):
 
 def solve_multi_linear(positions, v_max=None, a_max=None, **kwargs):
     from scipy.interpolate import PPoly
+    assert positions
     positions = waypoints_from_path(positions, **kwargs)
+    if len(positions) == 1:
+        positions.append(positions[-1])
     #assert len(positions) >= 2
     d = len(positions[0])
     v_max, a_max = get_default_limits(d, v_max=v_max, a_max=a_max)

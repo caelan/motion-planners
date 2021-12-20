@@ -65,7 +65,8 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
         distance_fn = distance_fn_from_extend_fn(extend_fn)
     if cost_fn is None:
         cost_fn = distance_fn
-    waypoints = waypoints_from_path(path, difference_fn=None) # TODO: no wrap around
+    # TODO: use extend_fn to extract waypoints
+    waypoints = waypoints_from_path(path, difference_fn=None) # TODO: difference_fn
     cost = compute_path_cost(waypoints, cost_fn=cost_fn)
     #paths = [extend_fn(*pair) for pair in get_pairs(waypoints)] # TODO: update incrementally
     #costs = [cost_fn(*pair) for pair in get_pairs(waypoints)]

@@ -3,13 +3,31 @@ import time
 
 import numpy as np
 
-from .linear import find_lower_bound, solve_linear
+from .linear import find_lower_bound, solve_linear, T_MIN
 from .limits import check_spline
 from .discretize import time_discretize_curve, derivative_discretize_curve, distance_discretize_curve, sample_discretize_curve
 from .parabolic import solve_multi_poly, solve_multivariate_ramp
 from .retime import EPSILON, trim, spline_duration, append_polys, get_interval, find_extrema
 from ..utils import INF, elapsed_time, get_pairs, find, default_selector, waypoints_from_path
 
+def within_velocity_limits(position_curve, max_v=None, **kwargs):
+    if max_v is None:
+        return True
+    velocity_curve = position_curve.derivative(nu=1)
+    extrema = find_extrema(velocity_curve, **kwargs)
+    return all(np.less_equal(np.absolute(velocity_curve(t)), max_v).all() for t in extrema)
+
+
+def within_acceleration_limits(position_curve, max_a=None, **kwargs):
+    velocity_curve = position_curve.derivative(nu=1)
+    return within_velocity_limits(velocity_curve, max_v=max_a, **kwargs)
+
+
+def within_dynamical_limits(position_curve, max_v=None, max_a=None, **kwargs):
+    return within_velocity_limits(position_curve, max_v=max_v, **kwargs) and \
+           within_acceleration_limits(position_curve, max_v=max_a, **kwargs)
+
+##################################################
 
 def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, max_accelerations=None): # a_max
 
@@ -17,6 +35,8 @@ def get_curve_collision_fn(collision_fn=lambda q: False, max_velocities=None, ma
         # TODO: stage the function to check all the easy things like joint limits first
         if curve is None:
             return True
+        #if not within_dynamical_limits(curve, max_v=max_velocities, max_a=max_accelerations, start_t=t0, end_t=t1):
+        #    return True
         # TODO: can exactly compute limit violations
         # if not check_spline(curve, v_max=max_velocities, a_max=None, verbose=False,
         #                     #start_t=t0, end_t=t1,
@@ -164,31 +184,37 @@ def smooth_curve(start_curve, v_max, a_max, curve_collision_fn,
 
 ##################################################
 
-def smooth_cubic(path, collision_fn, resolutions, v_max, a_max, time_step=1e-2,
-                 parabolic=False, intermediate=True, max_iterations=1000, max_time=INF, min_improve=0.):
+def smooth_cubic(path, collision_fn, resolutions, v_max=None, a_max=None, time_step=1e-2,
+                 parabolic=True, sample=False, intermediate=True, max_iterations=1000, max_time=INF,
+                 min_improve=0., verbose=False):
+    start_time = time.time()
     if path is None:
         return None
-    assert (max_iterations < INF) or (max_time < INF)
+    assert (v_max is not None) or (a_max is not None)
+    assert path and (max_iterations < INF) or (max_time < INF)
     from scipy.interpolate import CubicHermiteSpline
-    start_time = time.time()
-    start_positions = waypoints_from_path(path) # TODO: ensure following the same path
-    start_durations = [0] + [solve_linear(np.subtract(p2, p1), v_max, a_max, only_duration=True)
-                             for p1, p2 in get_pairs(start_positions)]
-    start_times = np.cumsum(start_durations)
-    start_velocities = [np.zeros(len(start_positions[0])) for _ in range(len(start_positions))]
-    start_curve = CubicHermiteSpline(start_times, start_positions, dydx=start_velocities)
 
     def curve_collision_fn(segment, t0=None, t1=None):
-        #if not check_spline(segment, v_max=v_max, a_max=None, start_t=t0, end_t=t1, verbose=False):
+        #if not within_dynamical_limits(curve, max_v=v_max, max_a=a_max, start_t=t0, end_t=t1):
         #    return True
         _, samples = sample_discretize_curve(segment, resolutions, start_t=t0, end_t=t1, time_step=time_step)
         if any(map(collision_fn, default_selector(samples))):
            return True
         return False
 
-    # if curve_collision_fn(start_curve, t0=None, t1=None):
-    #     #return None
-    #     return start_curve
+    start_positions = waypoints_from_path(path) # TODO: ensure following the same path (keep intermediate if need be)
+    if len(start_positions) == 1:
+        start_positions.append(start_positions[-1])
+
+    start_durations = [0] + [solve_linear(np.subtract(p2, p1), v_max, a_max, t_min=T_MIN, only_duration=True)
+                             for p1, p2 in get_pairs(start_positions)] # TODO: does not assume continuous acceleration
+    start_times = np.cumsum(start_durations) # TODO: dilate times
+    start_velocities = [np.zeros(len(start_positions[0])) for _ in range(len(start_positions))]
+    start_curve = CubicHermiteSpline(start_times, start_positions, dydx=start_velocities)
+    # TODO: directly optimize for shortest spline
+    if len(start_positions) <= 2:
+        return start_curve
+
     curve = start_curve
     for iteration in range(max_iterations):
         if elapsed_time(start_time) >= max_time:
@@ -213,21 +239,18 @@ def smooth_cubic(path, collision_fn, resolutions, v_max, a_max, time_step=1e-2,
 
         x1, x2 = local_positions
         v1, v2 = local_velocities
+
+        current_t = (t2 - t1) - min_improve # TODO: percent improve
         #min_t = 0
         min_t = find_lower_bound(x1, x2, v1, v2, v_max=v_max, a_max=a_max)
-        current_t = (t2 - t1) - min_improve # TODO: percent improve
+        if parabolic:
+            # Softly applies limits
+            min_t = solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max) # TODO: might not be feasible (soft constraint)
+            if min_t is None:
+                continue
         if min_t >= current_t:
             continue
-
-        #best_t = min_t
-        max_t = current_t
-        if parabolic:
-            ramp_t = solve_multivariate_ramp(x1, x2, v1, v2, v_max, a_max) # Might not be feasible
-            ramp_t = INF if ramp_t is None else ramp_t
-            max_t = min(max_t, ramp_t)
-        best_t = random.uniform(min_t, max_t)
-        if best_t >= current_t:
-            continue
+        best_t = random.uniform(min_t, current_t) if sample else min_t
 
         local_durations = [t1 - times[i1], best_t, times[i2] - t2]
         #local_times = [0, best_t]
@@ -249,12 +272,13 @@ def smooth_cubic(path, collision_fn, resolutions, v_max, a_max, time_step=1e-2,
         new_curve = CubicHermiteSpline(new_times, new_positions, dydx=new_velocities)
         if not intermediate and curve_collision_fn(new_curve, t0=None, t1=None):
             continue
-        print('Iterations: {} | Current time: {:.3f} | New time: {:.3f} | Elapsed time: {:.3f}'.format(
-            iteration, spline_duration(curve), spline_duration(new_curve), elapsed_time(start_time)))
+        if verbose:
+            print('Iterations: {} | Current time: {:.3f} | New time: {:.3f} | Elapsed time: {:.3f}'.format(
+                iteration, spline_duration(curve), spline_duration(new_curve), elapsed_time(start_time)))
         curve = new_curve
-    print('Iterations: {} | Start time: {:.3f} | End time: {:.3f} | Elapsed time: {:.3f}'.format(
-        max_iterations, spline_duration(start_curve), spline_duration(curve), elapsed_time(start_time)))
-    check_spline(curve, v_max, a_max)
+    if verbose:
+        print('Iterations: {} | Start time: {:.3f} | End time: {:.3f} | Elapsed time: {:.3f}'.format(
+            max_iterations, spline_duration(start_curve), spline_duration(curve), elapsed_time(start_time)))
     return curve
 
 ##################################################

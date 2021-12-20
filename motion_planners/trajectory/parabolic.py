@@ -1,6 +1,6 @@
 import numpy as np
 
-from .linear import quickest_inf_accel, acceleration_cost, check_curve
+from .linear import quickest_inf_accel, acceleration_cost, check_curve, T_MIN
 from .retime import curve_from_controls, check_time, spline_duration, append_polys, \
     MultiPPoly, EPSILON
 from ..utils import INF, get_pairs
@@ -38,7 +38,7 @@ def min_two_ramp(x1, x2, v1, v2, T, a_max, v_max=INF):
     if not candidates:
         return None
 
-    a = min(candidates, key=lambda a: abs(a))
+    a = min(candidates, key=abs)
     ts = (T + (v2 - v1) / a) / 2.
     durations = [ts, T - ts]
     #accels = [sign*abs(a), -sign*abs(a)]
@@ -161,16 +161,16 @@ def solve_multi_poly(times, positions, velocities, v_max, a_max, **kwargs):
 
 ##################################################
 
-def quickest_stage(x1, x2, v1, v2, v_max=INF, a_max=INF, min_t=0.):
+def quickest_stage(x1, x2, v1, v2, v_max=INF, a_max=INF, min_t=T_MIN):
     # TODO: handle infinite acceleration
     assert (v_max > 0.) and (a_max > 0.)
-    assert all(abs(v) <= v_max + EPSILON for v in [v1, v2])
+    assert all(abs(v) <= (v_max + EPSILON) for v in [v1, v2])
     if (v_max == INF) and (a_max == INF):
         T = 0
-        return min(min_t, T) # TODO: throw an error
+        return max(min_t, T) # TODO: throw an error
     if a_max == INF:
         T = quickest_inf_accel(x1, x2, v_max=v_max)
-        return min(min_t, T)
+        return max(min_t, T)
 
     # if (v1 == 0.) and (v2 == 0.):
     #     candidates = [opt_straight_line(x1, x2, v_max=v_max, a_max=a_max).x]
