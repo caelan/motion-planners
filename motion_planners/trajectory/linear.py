@@ -63,7 +63,7 @@ def check_curve(p_curve, x1, x2, v1, v2, T, v_max=INF, a_max=INF):
 
 def zero_one_fixed(x1, x2, T, v_max=INF, dt=EPSILON):
     from scipy.interpolate import PPoly
-    assert 0 < v_max < INF
+    #assert 0 < v_max < INF
     sign = get_sign(x2 - x1)
     d = abs(x2 - x1)
     v = d / T
@@ -126,7 +126,7 @@ def opt_straight_line(x1, x2, v_max=INF, a_max=INF, t_min=T_MIN, only_duration=F
     # Can always rest at the start of the trajectory if need be
     # Exploits symmetry
     assert (v_max > 0.) and (a_max > 0.)
-    assert (v_max < INF) or (a_max < INF)
+    #assert (v_max < INF) or (a_max < INF) or (t_min > 0)
     #v_max = abs(x2 - x1) / abs(v_max)
     d = abs(x2 - x1)
     #assert d > 0
