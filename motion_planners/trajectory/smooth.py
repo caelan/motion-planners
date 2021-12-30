@@ -8,7 +8,7 @@ from .limits import check_spline
 from .discretize import time_discretize_curve, derivative_discretize_curve, distance_discretize_curve, sample_discretize_curve
 from .parabolic import solve_multi_poly, solve_multivariate_ramp
 from .retime import EPSILON, trim, spline_duration, append_polys, get_interval, find_extrema
-from ..utils import INF, elapsed_time, get_pairs, find, default_selector, waypoints_from_path
+from ..utils import INF, elapsed_time, get_pairs, find, default_selector, waypoints_from_path, irange
 
 def within_velocity_limits(position_curve, max_v=None, **kwargs):
     if max_v is None:
@@ -66,7 +66,7 @@ def smooth_curve(start_curve, v_max, a_max, curve_collision_fn,
         #return None
         return start_curve
     curve = start_curve
-    for iteration in range(num):
+    for iteration in irange(num):
         if elapsed_time(start_time) >= max_time:
             break
         times = curve.x
@@ -216,7 +216,7 @@ def smooth_cubic(path, collision_fn, resolutions, v_max=None, a_max=None, time_s
         return start_curve
 
     curve = start_curve
-    for iteration in range(max_iterations):
+    for iteration in irange(max_iterations):
         if elapsed_time(start_time) >= max_time:
             break
         times = curve.x
