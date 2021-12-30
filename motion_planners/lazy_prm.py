@@ -4,7 +4,7 @@ from collections import namedtuple, defaultdict
 from .nearest import BruteForceNeighbors, KDNeighbors
 from .primitives import default_weights, get_embed_fn, get_distance_fn
 from .utils import INF, elapsed_time, get_pairs, default_selector, irange, \
-    merge_dicts, compute_path_cost, get_length, is_path, flatten, compute_path_cost
+    merge_dicts, compute_path_cost, get_length, is_path, flatten
 
 import time
 import numpy as np
@@ -110,6 +110,7 @@ class Roadmap(object):
         self.edge_paths = {}
         self.colliding_vertices = {}
         self.colliding_edges = {}
+        self.colliding_intermediates = {}
         self.add_samples(samples)
     @property
     def samples(self):
@@ -160,9 +161,19 @@ class Roadmap(object):
             # TODO: could update the colliding adjacent edges as well
             self.colliding_vertices[v] = collision_fn(x)
         return not self.colliding_vertices[v]
+    def check_intermediate(self, v1, v2, index, collision_fn):
+        if (v1, v2, index) not in self.colliding_intermediates:
+            x = self.get_path(v1, v2)[index]
+            self.colliding_intermediates[v1, v2, index] = collision_fn(x)
+            if self.colliding_intermediates[v1, v2, index]:
+                # TODO: record when all safe
+                self.colliding_edges[v1, v2] = self.colliding_intermediates[v1, v2, index]
+                if REVERSIBLE:
+                    self.colliding_edges[v2, v1] = self.colliding_edges[v1, v2]
+        return not self.colliding_intermediates[v1, v2, index]
     def check_edge(self, v1, v2, collision_fn):
         if (v1, v2) not in self.colliding_edges:
-            segment = default_selector(self.get_path(v1, v2))
+            segment = default_selector(self.get_path(v1, v2)) # TODO: check_intermediate
             self.colliding_edges[v1, v2] = any(map(collision_fn, segment))
             if REVERSIBLE:
                 self.colliding_edges[v2, v1] = self.colliding_edges[v1, v2]
@@ -171,9 +182,16 @@ class Roadmap(object):
         for v in default_selector(path):
             if not self.check_vertex(v, collision_fn):
                 return False
-        for v1, v2 in default_selector(get_pairs(path)):
-            if not self.check_edge(v1, v2, collision_fn):
-                return False
+        # for v1, v2 in default_selector(get_pairs(path)):
+        #     if not self.check_edge(v1, v2, collision_fn):
+        #         return False
+        # return True
+        intermediates = []
+        for v1, v2 in get_pairs(path):
+            intermediates.extend((v1, v2, index) for index in range(len(self.get_path(v1, v2))))
+        for v1, v2, index in default_selector(intermediates):
+           if not self.check_intermediate(v1, v2, index, collision_fn):
+               return False
         return True
     def check_roadmap(self, collision_fn):
         for vertex in self.vertices:
@@ -281,9 +299,9 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, 
         if lazy_path is None:
             break
         if verbose:
-            print('Candidate | Length: {} | Cost: {:.3f} | Vertices: {} | Edges: {} | Degree: {:.3f} | Time: {:.3f}'.format(
+            print('Candidate | Length: {} | Cost: {:.3f} | Vertices: {} | Samples: {} | Degree: {:.3f} | Time: {:.3f}'.format(
                 len(lazy_path), compute_path_cost(lazy_path, cost_fn=weight_fn),
-                len(roadmap.colliding_vertices), len(roadmap.colliding_edges),
+                len(roadmap.colliding_vertices), len(roadmap.colliding_intermediates),
                 degree, elapsed_time(start_time)))
         if roadmap.check_path(lazy_path, collision_fn):
             path = lazy_path
@@ -292,15 +310,16 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, 
         forward_visited = set(dijkstra(start_vertex, roadmap.neighbors_fn))
         backward_visited = set(dijkstra(end_vertex, roadmap.neighbors_fn))
         if verbose:
-            print('Failure | Forward: {} | Backward: {} | Vertices: {} | Edges: {} | Degree: {:.3f} | Time: {:.3f}'.format(
-                len(forward_visited), len(backward_visited), len(roadmap.colliding_vertices), len(roadmap.colliding_edges),
+            print('Failure | Forward: {} | Backward: {} | Vertices: {} | Samples: {} | Degree: {:.3f} | Time: {:.3f}'.format(
+                len(forward_visited), len(backward_visited),
+                len(roadmap.colliding_vertices), len(roadmap.colliding_intermediates),
                 degree, elapsed_time(start_time)))
         return Solution(path, samples, edges, roadmap.colliding_vertices, roadmap.colliding_edges)
 
     if verbose:
-        print('Solution | Length: {} | Cost: {:.3f} | Vertices: {} | Edges: {} | Degree: {:.3f} | Time: {:.3f}'.format(
+        print('Solution | Length: {} | Cost: {:.3f} | Vertices: {} | Samples: {} | Degree: {:.3f} | Time: {:.3f}'.format(
             len(path), compute_path_cost(path, cost_fn=weight_fn),
-            len(roadmap.colliding_vertices), len(roadmap.colliding_edges),
+            len(roadmap.colliding_vertices), len(roadmap.colliding_intermediates),
             degree, elapsed_time(start_time)))
     #waypoints = [samples[v] for v in path]
     #solution = [start] + refine_waypoints(waypoints, extend_fn)
@@ -320,7 +339,6 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=N
     # TODO: bias to stay near the (past/hypothetical) path
     # TODO: proximity pessimistic collision checking
     # TODO: roadmap reuse in general
-    # TODO: keep planning with increasing resolution
     start_time = time.time()
     weights, distance_fn, cost_fn = get_metrics(start, weights=weights, p_norm=p_norm, distance_fn=distance_fn, cost_fn=cost_fn)
     #print(weights, distance_fn, cost_fn)
