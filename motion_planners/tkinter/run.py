@@ -106,6 +106,7 @@ def retime_path(path, collision_fn=lambda q: False, smooth=False, **kwargs):
 ##################################################
 
 def problem1():
+    # TODO: randomize problems
     obstacles = [
         create_box(center=(.35, .75), extents=(.25, .25)),
         #create_box(center=(.75, .35), extents=(.25, .25)),
@@ -114,6 +115,23 @@ def problem1():
         #create_box(center=(.5, .5), extents=(.22, .22)),
 
         create_cylinder(center=(.25, .25), radius=.1),
+    ]
+
+    # TODO: alternate sampling from a mix of regions
+    regions = {
+        'env': create_box(center=(.5, .5), extents=(1., 1.)),
+        'green': create_box(center=(.8, .8), extents=(.1, .1)),
+    }
+    #start = np.array([0., 0.])
+    start = np.array([0.1, 0.1])
+    goal = 'green'
+
+    return start, goal, regions, obstacles
+
+def problem2():
+    obstacles = [
+        create_box(center=(.25, 0.5), extents=(.5, .05)),
+        create_box(center=(0.5, .25), extents=(.05, .5)),
     ]
 
     # TODO: alternate sampling from a mix of regions
