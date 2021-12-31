@@ -49,7 +49,16 @@ class KDNeighbors(NearestNeighbors):
         self.circular = circular
         self.embed_fn = embed_fn
         self.kwargs = kwargs
+        self.stale = True
         self.add_data(data)
+    def update(self):
+        if not self.stale:
+            return
+        self.stale = False
+        if self.embedded:
+            self.kd_tree = KDTree(self.embedded,
+                                  #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None
+                                  **self.kwargs)
     def add_data(self, new_data):
         indices = []
         for x in new_data:
@@ -57,12 +66,11 @@ class KDNeighbors(NearestNeighbors):
             indices.append(index)
             self.data.append(x)
             self.embedded.append(self.embed_fn(x))
-        if self.embedded:
-            # TODO: do lazily if stale
-            self.kd_tree = KDTree(self.embedded,
-                                  #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None
-                                  **self.kwargs)
+        self.stale |= bool(indices)
+        self.update()
         return zip(indices, new_data)
+    def remove_data(self, new_data):
+        raise NotImplementedError() # TODO: need to keep track of data indices (using id?)
     def query_neighbors(self, x, k=1, **kwargs):
         # TODO: class **kwargs
         closest_neighbors = {}

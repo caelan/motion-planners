@@ -128,7 +128,7 @@ def problem1():
 
     return start, goal, regions, obstacles
 
-def problem2():
+def infeasible():
     obstacles = [
         create_box(center=(.25, 0.5), extents=(.5, .05)),
         create_box(center=(0.5, .25), extents=(.05, .5)),
@@ -216,7 +216,8 @@ def main(draw=True):
 
     #########################
 
-    start, goal, regions, obstacles = problem1()
+    problem_fn = problem1 # problem1 | infeasible
+    start, goal, regions, obstacles = problem_fn()
     #obstacles = []
     environment = regions['env']
     if isinstance(goal, str) and (goal in regions):

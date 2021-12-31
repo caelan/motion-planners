@@ -20,6 +20,19 @@ ORDINAL = 1e3
 REVERSIBLE = True
 ROADMAPS = [] # TODO: not ideal
 
+def sample_until(sample_fn, num_samples, max_time=INF):
+    # TODO: is this actually needed?
+    # TODO: compute number of rejected samples
+    start_time = time.time()
+    samples = []
+    while (len(samples) < num_samples) and (elapsed_time(start_time) < max_time):
+        conf = sample_fn()  # TODO: include
+        # TODO: bound function based on distance_fn(start, conf) and individual distances
+        # if (max_cost == INF) or (distance_fn(start, conf) + distance_fn(conf, goal)) < max_cost:
+        # TODO: only keep edges that move toward the goal
+        samples.append(conf)
+    return samples
+
 def retrace_path(visited, vertex):
     if vertex is None:
         return []
@@ -87,8 +100,8 @@ def wastar_search(start_v, end_v, neighbors_fn, cost_fn=unit_cost_fn,
 ##################################################
 
 class Roadmap(object):
-    def __init__(self, extend_fn, weights=None, distance_fn=None, cost_fn=None, samples=[], p_norm=2, max_degree=5,
-                 max_distance=INF, approximate_eps=0., **kwargs):
+    def __init__(self, extend_fn, weights=None, distance_fn=None, cost_fn=None,
+                 p_norm=2, max_degree=5, max_distance=INF, approximate_eps=0., **kwargs):
         # TODO: custom cost_fn
         assert (weights is not None) or (distance_fn is not None)
         self.distance_fn = distance_fn
@@ -105,13 +118,12 @@ class Roadmap(object):
             self.nearest = KDNeighbors(embed_fn=get_embed_fn(self.weights), **kwargs)
             #self.nearest = BruteForceNeighbors(get_distance_fn(weights, p_norm=p_norm))
         self.edges = set()
-        self.outgoing_from_edges = defaultdict(set)
+        self.outgoing_from_vertex = defaultdict(set)
         self.edge_costs = {}
         self.edge_paths = {}
         self.colliding_vertices = {}
         self.colliding_edges = {}
         self.colliding_intermediates = {}
-        self.add_samples(samples)
     @property
     def samples(self):
         return self.nearest.data
@@ -130,13 +142,16 @@ class Roadmap(object):
         assert REVERSIBLE # TODO
         edges = {(v1, v2), (v2, v1)}
         self.edges.update(edges)
-        self.outgoing_from_edges[v1].add(v2)
-        self.outgoing_from_edges[v2].add(v1)
+        self.outgoing_from_vertex[v1].add(v2)
+        self.outgoing_from_vertex[v2].add(v1)
         return edges
     def add_samples(self, samples):
         new_edges = set()
         for v1, sample in self.nearest.add_data(samples):
+        #for v1, sample in enumerate(self.vertices):
             # TODO: could dynamically compute distances
+            # if len(self.outgoing_from_vertex[v1]) >= self.max_degree:
+            #     raise NotImplementedError()
             max_degree = min(self.max_degree + 1, len(self.samples))
             for d, v2, _ in self.nearest.query_neighbors(sample, k=max_degree, eps=self.approximate_eps,
                                                          p=self.p_norm, distance_upper_bound=self.max_distance):
@@ -152,7 +167,7 @@ class Roadmap(object):
         edge = (v1, v2)
         return not self.colliding_edges.get(edge, True)
     def neighbors_fn(self, v1):
-        for v2 in self.outgoing_from_edges[v1]:
+        for v2 in self.outgoing_from_vertex[v1]:
             if not self.is_colliding(v1, v2):
                 yield v2
     def check_vertex(self, v, collision_fn):
@@ -213,22 +228,12 @@ class Roadmap(object):
             if REVERSIBLE:
                 self.edge_paths[edge[::-1]] = path[::-1]
         return self.edge_paths[edge]
-    def sample(self, sample_fn, num_samples, max_time=INF):
-        # TODO: compute number of rejected samples
-        start_time = time.time()
-        samples = []
-        while (len(samples) < num_samples) and (elapsed_time(start_time) < max_time):
-            conf = sample_fn()  # TODO: include
-            # TODO: bound function based on distance_fn(start, conf) and individual distances
-            # if (max_cost == INF) or (distance_fn(start, conf) + distance_fn(conf, goal)) < max_cost:
-            # TODO: only keep edges that move toward the goal
-            samples.append(conf)
-        return self.add_samples(samples)
     def augment(self, sample_fn, num_samples=100):
         n = len(self.samples)
         if n >= num_samples:
             return self
-        self.sample(sample_fn, num_samples=num_samples - n)
+        samples = sample_until(sample_fn, num_samples=num_samples - n)
+        self.add_samples(samples)
         return self
 
 ##################################################
@@ -265,15 +270,15 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, 
     start_time = time.time()
     weights, distance_fn, cost_fn = get_metrics(start, weights=weights, p_norm=p_norm, distance_fn=distance_fn, cost_fn=cost_fn)
     if roadmap is None:
-        roadmap = Roadmap(extend_fn, weights=weights, distance_fn=distance_fn, cost_fn=cost_fn, samples=[start, goal], circular=circular)
+        roadmap = Roadmap(extend_fn, weights=weights, distance_fn=distance_fn, cost_fn=cost_fn, circular=circular)
                           #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
+        roadmap.add_samples([start, goal] + sample_until(sample_fn, num_samples))
     roadmap = roadmap.augment(sample_fn, num_samples=num_samples)
 
     samples, vertices, edges = roadmap
-    neighbors_from_index = roadmap.outgoing_from_edges
     start_vertex = roadmap.index(start)
     end_vertex = roadmap.index(goal)
-    degree = np.average(list(map(len, neighbors_from_index.values())))
+    degree = np.average(list(map(len, roadmap.outgoing_from_vertex.values())))
 
     # TODO: update collision occupancy based on proximity to existing colliding (for diversity as well)
     # TODO: minimize the maximum distance to colliding
@@ -309,6 +314,11 @@ def lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=None, 
     if path is None:
         forward_visited = set(dijkstra(start_vertex, roadmap.neighbors_fn))
         backward_visited = set(dijkstra(end_vertex, roadmap.neighbors_fn))
+        # for v in roadmap.vertices:
+        #     if not roadmap.colliding_vertices.get(v, False):
+        #         # TODO: add edges if the collision-free degree drops
+        #         num_colliding = sum(not roadmap.colliding_vertices.get(v2, False) for v2 in roadmap.outgoing_from_vertex[v])
+
         if verbose:
             print('Failure | Forward: {} | Backward: {} | Vertices: {} | Samples: {} | Degree: {:.3f} | Time: {:.3f}'.format(
                 len(forward_visited), len(backward_visited),
@@ -345,10 +355,8 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=N
     #input()
     if param_sequence is None:
         param_sequence = create_param_sequence()
-    roadmap = Roadmap(extend_fn, weights=weights, distance_fn=distance_fn, cost_fn=cost_fn, samples=[start, goal], circular=circular)
-                      #leafsize=10, compact_nodes=True, copy_data=False, balanced_tree=True, boxsize=None, **kwargs)
-    #roadmap = None
 
+    roadmap = None
     best_path = None
     best_cost = max_cost
     for i, params in enumerate(param_sequence):
@@ -358,9 +366,10 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=N
         if verbose:
             print('\nIteration: {} | Cost: {:.3f} | Elapsed: {:.3f} | Remaining: {:.3f} | Params: {}'.format(
                 i, best_cost, elapsed_time(start_time), remaining_time, params))
-        if not resuse:
-            roadmap = Roadmap(extend_fn, weights=weights, distance_fn=distance_fn, cost_fn=cost_fn,
-                              samples=[start, goal], circular=circular)
+        if (roadmap is None) or not resuse:
+            roadmap = Roadmap(extend_fn, weights=weights, distance_fn=distance_fn, cost_fn=cost_fn, circular=circular)
+            roadmap.add_samples([start, goal] + sample_until(sample_fn, params['num_samples']))
+
         new_path = lazy_prm(start, goal, sample_fn, extend_fn, collision_fn, roadmap=roadmap,
                             cost_fn=cost_fn, weights=weights, circular=circular, p_norm=p_norm,
                             max_time=remaining_time, max_cost=best_cost,
@@ -373,5 +382,6 @@ def lazy_prm_star(start, goal, sample_fn, extend_fn, collision_fn, distance_fn=N
             best_cost = new_cost
         if best_cost < success_cost:
             break
-    ROADMAPS.append(roadmap)
+    if roadmap is not None:
+        ROADMAPS.append(roadmap)
     return best_path
