@@ -123,14 +123,14 @@ def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorith
                    max_iterations=max_iterations, max_time=remaining_time)
     elif algorithm == 'rrt_connect':
         path = rrt_connect(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
-                           max_iterations=INF, max_time=remaining_time)
+                           max_iterations=max_iterations, max_time=remaining_time)
     elif algorithm == 'birrt':
         # TODO: checks the straight-line twice
         path = birrt(start, goal, distance_fn, sample_fn, extend_fn, collision_fn,
-                     max_iterations=INF, max_time=remaining_time, smooth=None, **kwargs) # restarts=2
+                     max_iterations=max_iterations, max_time=remaining_time, smooth=None, **kwargs) # restarts=2
     elif algorithm == 'rrt_star':
         path = rrt_star(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, radius=1,
-                        max_iterations=INF, max_time=remaining_time)
+                        max_iterations=max_iterations, max_time=remaining_time)
     elif algorithm == 'lattice':
         path = lattice(start, goal, extend_fn, collision_fn, distance_fn=distance_fn, max_time=INF)
     else:
