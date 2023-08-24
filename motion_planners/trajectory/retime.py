@@ -77,6 +77,10 @@ def get_times(curve):
     return curve.x
 
 
+def num_knots(curve):
+    return len(get_times(curve))
+
+
 def spline_start(spline):
     return get_times(spline)[0]
 

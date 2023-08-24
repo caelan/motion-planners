@@ -1,4 +1,8 @@
-from collections import namedtuple, Mapping
+from collections import namedtuple
+try:
+    from collections import Mapping
+except ImportError:
+    from collections.abc import Mapping
 from heapq import heappop, heappush
 import operator
 import time

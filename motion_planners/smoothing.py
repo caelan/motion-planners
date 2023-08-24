@@ -45,7 +45,7 @@ def smooth_path_old(path, extend_fn, collision_fn, cost_fn=None,
 ##################################################
 
 def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, sample_fn=None,
-                max_iterations=50, max_time=INF, converge_time=INF, verbose=False):
+                max_iterations=100, max_time=INF, converge_time=INF, verbose=False, print_frequency=10):
     """
     :param distance_fn: Distance function - distance_fn(q1, q2)->float
     :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
@@ -54,6 +54,7 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
     :param max_time: Maximum runtime - float
     :return: Path [q', ..., q"] or None if unable to find a solution
     """
+    # TODO: deprecate sample_fn
     # TODO: makes an assumption on extend_fn (to avoid sampling the same segment)
     # TODO: smooth until convergence
     # TODO: dynamic expansion of the nearby graph
@@ -79,7 +80,8 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
         paths = [list(extend_fn(*pair)) for pair in get_pairs(waypoints)]
         #weights = [len(paths[i]) for i, j in segments]
         probabilities = np.array(weights) / sum(weights)
-        if verbose:
+        if verbose and (print_frequency is not None) and (iteration % print_frequency == 0):
+            # TODO: only if an improvement
             print('Iteration: {} | Waypoints: {} | Cost: {:.3f} | Elapsed: {:.3f} | Remaining: {:.3f}'.format(
                 iteration, len(waypoints), cost, elapsed_time(start_time), max_time-elapsed_time(start_time)))
 
