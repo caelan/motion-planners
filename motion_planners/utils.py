@@ -189,6 +189,7 @@ def is_path(path):
 
 
 def compute_path_cost(path, cost_fn=get_distance):
+    # TODO: compute_endpoint_cost
     if not is_path(path):
         return INF
     #path = waypoints_from_path(path)

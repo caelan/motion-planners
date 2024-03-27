@@ -73,8 +73,9 @@ def random_restarts(solve_fn, start, goal, distance_fn, sample_fn, extend_fn, co
                         max_time=attempt_time, verbose=verbose, **kwargs)
         if path is None:
             continue
-        path = smooth_path(path, extend_fn, collision_fn, max_iterations=smooth,
-                           max_time=max_time-elapsed_time(start_time), verbose=verbose)
+        if smooth:
+            path = smooth_path(path, extend_fn, collision_fn, distance_fn=distance_fn, max_iterations=smooth,
+                               max_time=max_time-elapsed_time(start_time), verbose=verbose) # TODO: cost_fn
         solutions.append(path)
         if compute_path_cost(path, distance_fn) < success_cost:
             break
@@ -136,6 +137,8 @@ def solve(start, goal, distance_fn, sample_fn, extend_fn, collision_fn, algorith
         path = lattice(start, goal, extend_fn, collision_fn, distance_fn=distance_fn, max_time=INF)
     else:
         raise NotImplementedError(algorithm)
+    if not smooth:
+        return path
 
     remaining_time = min(smooth_time, max_time - elapsed_time(start_time))
     return smooth_path(path, extend_fn, collision_fn, # sample_fn=sample_fn,
