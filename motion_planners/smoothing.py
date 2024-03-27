@@ -49,7 +49,7 @@ def smooth_path_old(path, extend_fn, collision_fn, cost_fn=None,
 ##################################################
 
 def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, sample_fn=None, # TODO: deprecate sample_fn
-                max_iterations=100, max_time=INF, converge_fraction=0.0, converge_time=INF, print_frequency=100, verbose=False):
+                max_iterations=100, max_time=INF, converge_fraction=0.0, converge_time=INF, print_frequency=1., verbose=False):
     """
     :param distance_fn: Distance function - distance_fn(q1, q2)->float
     :param extend_fn: Extension function - extend_fn(q1, q2)->[q', ..., q"]
@@ -58,14 +58,14 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
     :param max_time: Maximum runtime - float
     :return: Path [q', ..., q"] or None if unable to find a solution
     """
-    # TODO: deprecate sample_fn
     # TODO: makes an assumption on extend_fn (to avoid sampling the same segment)
     # TODO: smooth until convergence
     # TODO: dynamic expansion of the nearby graph
     start_time = last_time = time.time()
+    print_time = -INF
     if not path or not max_iterations:
         return path
-    assert (max_iterations < INF) or (max_time < INF)
+    assert (max_iterations < INF) or (max_time < INF) or (converge_time < INF)
     if distance_fn is None:
         distance_fn = distance_fn_from_extend_fn(extend_fn)
     if cost_fn is None:
@@ -77,20 +77,23 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
     #paths = [extend_fn(*pair) for pair in get_pairs(waypoints)] # TODO: update incrementally
     #costs = [cost_fn(*pair) for pair in get_pairs(waypoints)]
     for iteration in irange(max_iterations):
-        remaining_time = max_time - elapsed_time(start_time)
-        improve_time = elapsed_time(last_time)
-        if (remaining_time <= 0.) or (improve_time > converge_time) or (len(waypoints) <= 2):
+        current_duration = elapsed_time(start_time)
+        remaining_duration = max_time - current_duration
+        last_duration = elapsed_time(last_time)
+        improve_duration = converge_time - last_duration
+        if (remaining_duration <= 0.) or (improve_duration <= 0.) or (len(waypoints) <= 2):
             break
 
         segments = get_pairs(range(len(waypoints)))
-        weights = [distance_fn(waypoints[i], waypoints[j]) for i, j in segments]
+        weights = [distance_fn(waypoints[i], waypoints[j]) for i, j in segments] # TODO: avoid recomputing
         paths = [list(extend_fn(*pair)) for pair in get_pairs(waypoints)]
         #weights = [len(paths[i]) for i, j in segments]
         probabilities = np.array(weights) / sum(weights)
-        if verbose and (print_frequency is not None) and (iteration % print_frequency == 0):
+        if verbose and (print_frequency is not None) and (elapsed_time(print_time) >= print_frequency):
             # TODO: only if an improvement
-            print('Iteration: {} | Waypoints: {} | Cost: {:.5f} | Improve: {:.3f} | Elapsed: {:.3f} | Remaining: {:.3f}'.format(
-                iteration, len(waypoints), cost, elapsed_time(start_time), improve_time, remaining_time))
+            print('Iteration: {} | Waypoints: {} | Cost: {:.5f} | Improve: {:.3f} | Converge: {:.3f} | Current: {:.3f} | Remaining: {:.3f}'.format(
+                iteration, len(waypoints), cost, last_duration, improve_duration, current_duration, remaining_duration))
+            print_time = time.time()
 
         #segment1, segment2 = choices(segments, weights=probabilities, k=2)
         seg_indices = list(range(len(segments)))
@@ -107,7 +110,8 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
         # TODO: option to sample_fn only adjacent pairs
         #point1, point2 = [convex_combination(waypoints[i], waypoints[j], w=random())
         #                  for i, j in [segment1, segment2]]
-        point1, point2 = [choice(paths[i]) for i, _ in [segment1, segment2]]
+        # point1, point2 = [choice(paths[i]) for i, _ in [segment1, segment2]]
+        point1, point2 = [choice(list(extend_fn(waypoints[i], waypoints[j]))) for i, j in [segment1, segment2]]
 
         i, _ = segment1
         _, j = segment2
@@ -121,11 +125,12 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
         if (new_cost >= cost) or (improve_fraction <= converge_fraction) or any(map(collision_fn, shortcut)) or \
                 any(collision_fn(q) for q in default_selector(refine_waypoints(shortcut, extend_fn))):
             continue
-        print('Iteration: {}) Start index: {} | End index: {} | Old cost: {:.5f} | New cost: {:.5f} | Improve: {:.3%}'.format(
-            i, j, iteration, cost, new_cost, improve_fraction))
+        # print('Iteration: {}) Start index: {} | End index: {} | Old cost: {:.5f} | New cost: {:.5f} | Improve: {:.3%}'.format(
+        #     iteration, i, j, cost, new_cost, improve_fraction))
         waypoints = new_waypoints
         cost = new_cost
         last_time = time.time()
+        # TODO: time between last improvement
     if verbose:
         print('Iterations: {} | Waypoints: {} | DOFs: {} | Final cost: {:.5f} | Initial cost: {:.5f} | '
               'Final Improve: {:.3f} | Elapsed: {:.3f}'.format(
