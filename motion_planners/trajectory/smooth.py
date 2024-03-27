@@ -174,10 +174,10 @@ def smooth_curve(start_curve, v_max, a_max, curve_collision_fn,
             if (spline_duration(new_curve) >= spline_duration(curve)) or \
                     not check_spline(new_curve, v_max, a_max):
                 continue
-        print('Iterations: {} | Current time: {:.3f} | New time: {:.3f} | Elapsed time: {:.3f}'.format(
+        print('Iterations: {} | Current duration: {:.3f} | New duration: {:.3f} | Elapsed time: {:.3f}'.format(
             iteration, spline_duration(curve), spline_duration(new_curve), elapsed_time(start_time)))
         curve = new_curve
-    print('Iterations: {} | Start time: {:.3f} | End time: {:.3f} | Elapsed time: {:.3f}'.format(
+    print('Iterations: {} | Initial duration: {:.3f} | Final duration: {:.3f} | Elapsed time: {:.3f}'.format(
         num, spline_duration(start_curve), spline_duration(curve), elapsed_time(start_time)))
     check_spline(curve, v_max, a_max)
     return curve

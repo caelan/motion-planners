@@ -69,10 +69,13 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
     # TODO: use extend_fn to extract waypoints
     waypoints = waypoints_from_path(path, difference_fn=None) # TODO: difference_fn
     cost = compute_path_cost(waypoints, cost_fn=cost_fn)
+    initial_cost = cost
     #paths = [extend_fn(*pair) for pair in get_pairs(waypoints)] # TODO: update incrementally
     #costs = [cost_fn(*pair) for pair in get_pairs(waypoints)]
     for iteration in irange(max_iterations):
-        if (elapsed_time(start_time) > max_time) or (elapsed_time(last_time) > converge_time) or (len(waypoints) <= 2):
+        remaining_time = max_time - elapsed_time(start_time)
+        improve_time = elapsed_time(last_time)
+        if (remaining_time <= 0.) or (improve_time > converge_time) or (len(waypoints) <= 2):
             break
 
         segments = get_pairs(range(len(waypoints)))
@@ -82,8 +85,8 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
         probabilities = np.array(weights) / sum(weights)
         if verbose and (print_frequency is not None) and (iteration % print_frequency == 0):
             # TODO: only if an improvement
-            print('Iteration: {} | Waypoints: {} | Cost: {:.3f} | Elapsed: {:.3f} | Remaining: {:.3f}'.format(
-                iteration, len(waypoints), cost, elapsed_time(start_time), max_time-elapsed_time(start_time)))
+            print('Iteration: {} | Waypoints: {} | Cost: {:.3f} | Improve: {:.3f} | Elapsed: {:.3f} | Remaining: {:.3f}'.format(
+                iteration, len(waypoints), cost, elapsed_time(start_time), improve_time, remaining_time))
 
         #segment1, segment2 = choices(segments, weights=probabilities, k=2)
         seg_indices = list(range(len(segments)))
@@ -106,12 +109,16 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
         #shortcut_paths = [extend_fn(*pair) for pair in get_pairs(waypoints)]
         new_waypoints = waypoints[:i+1] + shortcut + waypoints[j:] # TODO: reuse computation
         new_cost = compute_path_cost(new_waypoints, cost_fn=cost_fn)
-        if new_cost >= cost: # TODO: cost must have percent improvement above a threshold
+        if (new_cost >= cost) or any(map(collision_fn, shortcut)) or \
+                any(collision_fn(q) for q in default_selector(refine_waypoints(shortcut, extend_fn))):
             continue
-        if not any(collision_fn(q) for q in default_selector(refine_waypoints(shortcut, extend_fn))):
-            waypoints = new_waypoints
-            cost = new_cost
-            last_time = time.time()
+        waypoints = new_waypoints
+        cost = new_cost
+        last_time = time.time()
+    if verbose:
+        print('Iterations: {} | Waypoints: {} | DOFs: {} | Final cost: {:.3f} | Initial cost: {:.3f} | '
+              'Final Improve: {:.3f} | Elapsed: {:.3f}'.format(
+            iteration, len(waypoints), len(waypoints[0]), cost, initial_cost, last_time - start_time, elapsed_time(start_time)))
     #return waypoints
     return refine_waypoints(waypoints, extend_fn)
 
