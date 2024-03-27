@@ -86,7 +86,7 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
 
         segments = get_pairs(range(len(waypoints)))
         weights = [distance_fn(waypoints[i], waypoints[j]) for i, j in segments] # TODO: avoid recomputing
-        paths = [list(extend_fn(*pair)) for pair in get_pairs(waypoints)]
+        #paths = [list(extend_fn(*pair)) for pair in get_pairs(waypoints)]
         #weights = [len(paths[i]) for i, j in segments]
         probabilities = np.array(weights) / sum(weights)
         if verbose and (print_frequency is not None) and (elapsed_time(print_time) >= print_frequency):
@@ -111,7 +111,12 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
         #point1, point2 = [convex_combination(waypoints[i], waypoints[j], w=random())
         #                  for i, j in [segment1, segment2]]
         # point1, point2 = [choice(paths[i]) for i, _ in [segment1, segment2]]
-        point1, point2 = [choice(list(extend_fn(waypoints[i], waypoints[j]))) for i, j in [segment1, segment2]]
+        paths = [list(extend_fn(waypoints[i], waypoints[j]))[:-1] for i, j in [segment1, segment2]]
+        if not all(paths):
+            # TODO: probably should include endpoints
+            # TODO: increase extend_fn resolution
+            continue
+        point1, point2 = [choice(path) for path in paths]
 
         i, _ = segment1
         _, j = segment2
@@ -123,7 +128,7 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
         new_cost = compute_path_cost(new_waypoints, cost_fn=cost_fn)
         improve_fraction = (cost - new_cost) / cost
         if (new_cost >= cost) or (improve_fraction <= converge_fraction) or any(map(collision_fn, shortcut)) or \
-                any(collision_fn(q) for q in default_selector(refine_waypoints(shortcut, extend_fn))):
+                any(collision_fn(q) for q in default_selector(refine_waypoints(shortcut, extend_fn)[:-1])):
             continue
         # print('Iteration: {}) Start index: {} | End index: {} | Old cost: {:.5f} | New cost: {:.5f} | Improve: {:.3%}'.format(
         #     iteration, i, j, cost, new_cost, improve_fraction))
@@ -136,6 +141,6 @@ def smooth_path(path, extend_fn, collision_fn, distance_fn=None, cost_fn=None, s
               'Final Improve: {:.3f} | Elapsed: {:.3f}'.format(
             iteration, len(waypoints), len(waypoints[0]), cost, initial_cost, last_time - start_time, elapsed_time(start_time)))
     #return waypoints
-    return refine_waypoints(waypoints, extend_fn)
+    return [waypoints[0]] + refine_waypoints(waypoints, extend_fn)
 
 #smooth_path = smooth_path_old
